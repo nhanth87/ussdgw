@@ -66,5 +66,15 @@
 			<artifactId>log4j</artifactId>
 			<version>${log4j.version}</version>
 		</dependency>
+			<dependency>
+			<groupId>com.squareup.okhttp3</groupId>
+			<artifactId>okhttp</artifactId>
+			<version>4.12.0</version>
+		</dependency>
+		<dependency>
+			<groupId>org.mobicents.ussd</groupId>
+			<artifactId>xml</artifactId>
+			<version>${project.version}</version>
+		</dependency>
 	</dependencies>
 </project>
