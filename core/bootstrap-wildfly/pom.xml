@@ -12,6 +12,8 @@
 	<name>Core : Bootstrap-wildfly</name>
 	
 	<properties>
+        <jss7.restcomm.version>9.2.11</jss7.restcomm.version>
+        <sctp.version>2.0.14</sctp.version>
         <version.wildfly.as>10.1.0.Final</version.wildfly.as>
         <version.wildfly.core>2.2.0.Final</version.wildfly.core>
         <module.name>org.mobicents.ussd.bootstrap</module.name>
