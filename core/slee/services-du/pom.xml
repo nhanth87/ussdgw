@@ -1,0 +1,157 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>org.mobicents.ussd</groupId>
+		<artifactId>slee</artifactId>
+		<version>7.2.1-SNAPSHOT</version>
+	</parent>
+
+	<artifactId>services-DU</artifactId>
+	<name>Core : SLEE : Service</name>
+
+	<dependencies>
+		<dependency>
+			<artifactId>library</artifactId>
+			<groupId>${project.groupId}</groupId>
+			<version>${project.version}</version>
+		</dependency>
+		<dependency>
+			<artifactId>sbbs</artifactId>
+			<groupId>${project.groupId}</groupId>
+			<version>${project.version}</version>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.mobicents.tools</groupId>
+				<artifactId>maven-du-plugin</artifactId>
+				<configuration>
+					<excludeTransitive>false</excludeTransitive>
+				</configuration>
+				<executions>
+					<execution>
+						<goals>
+							<goal>copy-dependencies</goal>
+							<goal>generate-descriptor</goal>
+							<goal>generate-ant-management-script</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+
+			<plugin>
+				<artifactId>maven-antrun-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>prepare-jboss-jar</id>
+						<phase>package</phase>
+						<goals>
+							<goal>run</goal>
+						</goals>
+						<configuration>
+							<target>
+								<unzip overwrite="true" src="target/${project.build.finalName}.jar" dest="target/jboss-pack" />
+								<delete includeemptydirs="false">
+									<fileset dir="target/jboss-pack/jars">
+										<include name="activation-*.jar" />
+										<include name="servlet-api-*.jar" />
+										<include name="jboss-as-j2se-*-tests.jar" />
+									</fileset>
+								</delete>
+								<unzip overwrite="true" src="target/jboss-pack/jars/sbbs-${project.version}.jar" dest="target/jboss-pack-sbbs" />
+								<replace file="target/jboss-pack-sbbs/META-INF/sbb-jar.xml"
+									value="&lt;resource-adaptor-type-vendor&gt;org.mobicents&lt;/resource-adaptor-type-vendor&gt;&lt;!--HTTP RESOURCE ADAPTOR type-vendor--&gt;"
+									token="&lt;resource-adaptor-type-vendor&gt;org.restcomm&lt;/resource-adaptor-type-vendor&gt;&lt;!--HTTP RESOURCE ADAPTOR type-vendor--&gt;" />
+								<zip basedir="target/jboss-pack-sbbs" destfile="target/jboss-pack/jars/sbbs-${project.version}.jar" />
+								<zip basedir="target/jboss-pack" destfile="target/services-DU-jboss-${project.version}.jar" />
+							</target>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
+
+
+	<profiles>
+		<profile>
+			<!-- Adds the files to JBoss AS -->
+			<id>deploy-module-jboss5</id>
+			<build>
+				<plugins>
+					<plugin>
+						<artifactId>maven-antrun-plugin</artifactId>
+						<executions>
+							<execution>
+								<id>deploy-DU</id>
+								<phase>install</phase>
+								<goals>
+									<goal>run</goal>
+								</goals>
+								<configuration>
+									<target>
+										<copy overwrite="true" file="target/services-DU-jboss-${project.version}.jar" todir="${jboss.home}/server/${node}/deploy" />
+									</target>
+								</configuration>
+							</execution>
+							<execution>
+								<id>undeploy-DU</id>
+								<phase>clean</phase>
+								<goals>
+									<goal>run</goal>
+								</goals>
+								<configuration>
+									<target>
+										<delete file="${jboss.home}/server/${node}/deploy/services-DU-jboss-${project.version}.jar" />
+									</target>
+								</configuration>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<profile>
+			<!-- Adds the files to WildFly server -->
+			<id>deploy-module-wildfly</id>
+			<build>
+				<plugins>
+					<plugin>
+						<artifactId>maven-antrun-plugin</artifactId>
+						<executions>
+							<execution>
+								<id>deploy-DU</id>
+								<phase>install</phase>
+								<goals>
+									<goal>run</goal>
+								</goals>
+								<configuration>
+									<target>
+										<copy overwrite="true" file="target/${project.build.finalName}.jar" todir="${jboss.home}/standalone/deployments" />
+									</target>
+								</configuration>
+							</execution>
+							<execution>
+								<id>undeploy-DU</id>
+								<phase>clean</phase>
+								<goals>
+									<goal>run</goal>
+								</goals>
+								<configuration>
+									<target>
+										<delete file="${jboss.home}/standalone/deployments/${project.build.finalName}.jar" />
+									</target>
+								</configuration>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
+
+</project>

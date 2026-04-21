@@ -1,0 +1,63 @@
+# ignore Maven generated target folders
+~/target/
+**/target/
+target
+
+# ignore eclipse files
+.project
+.classpath
+.settings
+.metadata
+
+# ignore IDEA files
+*.iml
+*.ipr
+*.iws
+.idea/
+**/.idea/
+
+# ignore NetBeans files
+nbactions.xml
+nb-configuration.xml
+catalog.xml
+
+# vim files
+*.swp
+
+# temp files
+*~
+
+# hprof dumps
+/*.hprof
+
+# ignore logs
+server.log
+**/*.log
+
+# ignore java crashes
+hs_err_pid*.log
+
+# H2 databases produced by tests
+*.h2.db
+
+# Java classes
+**/*.class
+
+# Archives
+*.tar.gz
+*.zip
+*.jar
+*.war
+*.ear
+
+# Editor/AI dirs
+.minimax/
+.vscode/
+__pycache__/
+
+# Release folders - only keep build.xml
+release/**
+!release/build.xml
+release-wildfly/**
+!release-wildfly/build.xml
+!release-wildfly/extensions-build.xml

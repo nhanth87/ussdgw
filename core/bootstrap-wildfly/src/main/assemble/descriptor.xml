@@ -1,0 +1,46 @@
+<assembly>
+
+	<id>wildfly</id>
+
+	<formats>
+		<format>dir</format>
+	</formats>
+
+	<baseDirectory>main</baseDirectory>
+
+	<fileSets>
+		<fileSet>
+			<directory>src/main/module</directory>
+			<outputDirectory>/</outputDirectory>
+			<filtered>true</filtered>
+		</fileSet>
+	</fileSets>
+
+	<dependencySets>
+		<dependencySet>
+			<outputDirectory>/</outputDirectory>
+			<unpack>false</unpack>
+			<scope>runtime</scope>
+			<includes>
+				<include>io.dropwizard.metrics:metrics-core</include>
+				<!-- USSD libraris -->
+				<include>org.mobicents.ussd:bootstrap-wildfly</include>
+				<include>org.mobicents.ussd:domain</include>
+				<include>org.mobicents.ussd:xml</include>
+				
+				<!-- RestComm statistics -->
+				<include>org.apache.httpcomponents:httpclient</include>
+				<include>org.apache.httpcomponents:httpcore</include>
+				<include>com.google.code.gson:gson</include>
+				<include>org.restcomm.commons:restcomm-statistics</include>
+				
+				<include>joda-time:joda-time</include>
+				<include>org.apache.commons:commons-email</include>
+				<include>javax.mail:mail</include>
+				<include>commons-codec:commons-codec</include>
+				<include>com.google.guava:guava</include>
+			</includes>
+		</dependencySet>
+	</dependencySets>
+
+</assembly>

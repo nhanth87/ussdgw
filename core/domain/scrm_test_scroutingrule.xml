@@ -1,0 +1,17 @@
+<scroutingrulelist><ArrayList>
+  <item>
+    <ruleType>HTTP</ruleType>
+    <shortcode>*123#</shortcode>
+    <networkid>0</networkid>
+    <ruleurl>http://localhost:8080/ussddemo/test</ruleurl>
+    <exactmatch>true</exactmatch>
+  </item>
+  <item>
+    <ruleType>SIP</ruleType>
+    <shortcode>*456#</shortcode>
+    <networkid>0</networkid>
+    <sipProxy>127.0.0.1:5060</sipProxy>
+    <exactmatch>true</exactmatch>
+  </item>
+</ArrayList>
+</scroutingrulelist>
