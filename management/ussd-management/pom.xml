@@ -1,0 +1,114 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>org.mobicents.ussd</groupId>
+		<artifactId>parent</artifactId>
+		<version>7.2.1-SNAPSHOT</version>
+		<relativePath>../../pom.xml</relativePath>
+	</parent>
+
+	<groupId>org.mobicents.ussd.management</groupId>
+	<artifactId>ussd-ui-management</artifactId>
+	
+	<name>Restcomm USSD :: Management :: UI :: ${project.artifactId}</name>
+	<packaging>war</packaging>
+
+	<properties>
+	</properties>
+
+	<build>
+		<finalName>ussd-management</finalName>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-war-plugin</artifactId>
+				<version>3.4.0</version>
+			</plugin>
+		</plugins>
+	</build>
+
+	<profiles>
+		<profile>
+			<!-- Adds the files to JBoss AS -->
+			<id>deploy-module-jboss5</id>
+			<build>
+				<plugins>
+					<plugin>
+						<artifactId>maven-antrun-plugin</artifactId>
+						<executions>
+							<execution>
+								<id>deploy</id>
+								<phase>install</phase>
+								<goals>
+									<goal>run</goal>
+								</goals>
+								<configuration>
+									<target>
+										<echo>
+											${jboss.home}server/default/deploy
+										</echo>
+										<copy file="${project.build.directory}/ussd-management.war" todir="${jboss.home}/server/${node}/deploy" />
+									</target>
+								</configuration>
+							</execution>
+							<execution>
+								<id>undeploy</id>
+								<phase>clean</phase>
+								<goals>
+									<goal>run</goal>
+								</goals>
+								<configuration>
+									<target>
+										<delete failonerror="false" file="${jboss.home}/server/${node}/deploy/ussd-management.war" />
+									</target>
+								</configuration>
+							</execution>
+						</executions>
+					</plugin>                        
+				</plugins>
+			</build>
+		</profile>
+
+		<profile>
+			<!-- Adds the files to WildFly server -->
+			<id>deploy-module-wildfly</id>
+			<build>
+				<plugins>
+					<plugin>
+						<artifactId>maven-antrun-plugin</artifactId>
+						<executions>
+							<execution>
+								<id>deploy</id>
+								<phase>install</phase>
+								<goals>
+									<goal>run</goal>
+								</goals>
+								<configuration>
+									<target>
+										<echo>
+											${jboss.home}server/default/deploy
+										</echo>
+										<copy file="${project.build.directory}/ussd-management.war" todir="${jboss.home}/standalone/deployments" />
+									</target>
+								</configuration>
+							</execution>
+							<execution>
+								<id>undeploy</id>
+								<phase>clean</phase>
+								<goals>
+									<goal>run</goal>
+								</goals>
+								<configuration>
+									<target>
+										<delete failonerror="false" file="${jboss.home}/standalone/deployments/ussd-management.war" />
+									</target>
+								</configuration>
+							</execution>
+						</executions>
+					</plugin>                        
+				</plugins>
+			</build>
+		</profile>
+	</profiles>		
+</project>

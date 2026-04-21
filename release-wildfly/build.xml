@@ -1,0 +1,372 @@
+<?xml version="1.0"?>
+<project name="restcomm.ussdgw.release" default="release" basedir=".">
+    <property environment="sys"/>
+    <property name="release.dir" location="${ant.file.restcomm.ussdgw.release}/../target" />
+    <property name="base.dir" location="${ant.file.restcomm.ussdgw.release}/.." />
+    <property name="docs.dir" location="${release.dir}/docs" />
+    <property name="bundle.docs.dir" location="${base.dir}/docs-bundle" />
+    <property name="restcomm.ussd.dir" value="${base.dir}/.." />
+    <property name="m2.repo" value="${sys.USERPROFILE}/.m2/repository" />
+    <property name="restcomm.ussd.release.version" value="7.2.1-SNAPSHOT"/>
+
+    <!-- WildFly 10 base distro (cleaned SIP servlets) -->
+    <property name="wildfly.local.zip" value="${base.dir}/wildfly-10.0.0.Final-cleaned.zip" />
+    <property name="wildfly.home.relative.path" value="wildfly-10.0.0.Final"/>
+    <property name="jboss.home" value ="${release.dir}/${wildfly.home.relative.path}/"/>
+    <property name="deploy.dir" value="${jboss.home}/standalone/deployments" />
+    <property name="jboss.modules.path" value="${jboss.home}/modules/system/layers/base" />
+
+    <!-- javassist jar for runtime bytecode compatibility -->
+    <property name="javassist.jar" value="${base.dir}/javassist.jar" />
+
+    <!-- jandex upgrade for module-info.class support (Java 9+ JARs in WAR deployments) -->
+    <property name="jandex.patch.jar" value="${m2.repo}/org/jboss/jandex/2.2.3.Final/jandex-2.2.3.Final.jar" />
+
+    <!-- SIP Servlets zip for standalone overlay -->
+    <property name="sip.servlets.zip" value="C:/Users/Windows/Downloads/restcomm-sip-servlets-3.2.0-89-wildfly-10.0.0.Final.zip" />
+    <property name="sip.temp.dir" value="${release.dir}/sip-servlets-temp" />
+
+    <!-- Pre-patched config files -->
+    <property name="patched.standalone.xml" value="${base.dir}/standalone-patched.xml" />
+    <property name="patched.slee.module.xml" value="${base.dir}/slee-container-module-patched.xml" />
+
+    <!-- Local workspace projects -->
+    <property name="jss7.dir" value="${restcomm.ussd.dir}/../jSS7" />
+    <property name="jain-slee.dir" value="${restcomm.ussd.dir}/../jain-slee/jain-slee" />
+    <property name="jain-slee-ss7.dir" value="${restcomm.ussd.dir}/../jain-slee.ss7" />
+    <property name="jain-slee-http.dir" value="${restcomm.ussd.dir}/../jain-slee-http-okhttp" />
+    <property name="jain-slee-jdbc.dir" value="${restcomm.ussd.dir}/../jain-slee.jdbc" />
+    <property name="jain-slee-sip.dir" value="${restcomm.ussd.dir}/../jain-slee.sip" />
+
+    <!-- Dependency versions from local -->
+    <property name="restcomm-jss7.version" value="9.2.10" />
+    <property name="restcomm-map-ra.version" value="9.2.10" />
+    <property name="restcomm-slee.http.version" value="7.0.0-SNAPSHOT" />
+    <property name="restcomm-slee.jdbc.version" value="7.0.0-SNAPSHOT" />
+    <property name="restcomm-slee.sip.version" value="7.0.0-SNAPSHOT" />
+
+    <property name="release.build.goals" value="clean install -DskipTests"/>
+    <property name="release.ts.deploy.goals" value="clean deploy"/>
+
+    <condition property="mvn.executable" value="C:/ProgramData/chocolatey/lib/maven/apache-maven-3.9.12/bin/mvn.bat" else="mvn">
+        <os family="windows"/>
+    </condition>
+
+    <taskdef onerror="fail" resource="net/sf/antcontrib/antlib.xml">
+        <classpath>
+            <pathelement location="${ant.file.restcomm.ussdgw.release}/../ant-contrib-1.0b3.jar" />
+        </classpath>
+    </taskdef>
+
+    <target name="clean">
+        <delete dir="${release.dir}" failonerror="false"/>
+        <delete dir="${bundle.docs.dir}" failonerror="false"/>
+        <delete>
+            <fileset dir="${base.dir}">
+                <include name="restcomm-ussd-*.*" />
+            </fileset>
+        </delete>
+    </target>
+
+    <target name="release" depends="clean,extract-wildfly,patch-jandex,overlay-standalone,clean-up-distro,build-ussd,copy-ussd,build-docs,copy-docs,make-final-zip,bundle-documentation" />
+    <target name="release-no-docs" depends="clean,extract-wildfly,patch-jandex,overlay-standalone,clean-up-distro,build-ussd,copy-ussd,make-final-zip" />
+    <target name="release-no-clean" depends="extract-wildfly,patch-jandex,overlay-standalone,clean-up-distro,build-ussd,copy-ussd,build-docs,copy-docs,make-final-zip,bundle-documentation" />
+
+    <target name="deploy">
+        <ant antfile="${ant.file.restcomm.ussdgw.release}" target="release">
+            <property name="release.build.goals" value="${release.ts.deploy.goals}" />
+        </ant>
+    </target>
+
+    <target name="deploy-local">
+        <ant antfile="${ant.file.restcomm.ussdgw.release}" target="release">
+            <property name="release.build.goals" value="${release.ts.deploy.goals.local}" />
+        </ant>
+    </target>
+
+    <!-- Extract WildFly 10 cleaned base distro from local zip -->
+    <target name="extract-wildfly">
+        <echo>Extracting WildFly 10 base distro from ${wildfly.local.zip}</echo>
+        <available file="${wildfly.local.zip}" property="wildfly.zip.exists" />
+        <fail unless="wildfly.zip.exists" message="WildFly cleaned zip not found: ${wildfly.local.zip}" />
+        <mkdir dir="${release.dir}" />
+        <exec executable="powershell" dir="${release.dir}">
+            <arg value="-Command" />
+            <arg value="Expand-Archive -Path '${wildfly.local.zip}' -DestinationPath '${release.dir}/${wildfly.home.relative.path}' -Force" />
+        </exec>
+    </target>
+
+    <!-- Patch Jandex to 2.2.3.Final to fix module-info.class indexing warnings (WFLYSRV0003) -->
+    <target name="patch-jandex">
+        <echo>Patching Jandex to 2.2.3.Final for module-info.class support</echo>
+        <property name="jandex.module.dir" value="${jboss.home}/modules/system/layers/base/org/jboss/jandex/main" />
+        <copy file="${jandex.patch.jar}" todir="${jandex.module.dir}" overwrite="true" failonerror="true" />
+        <replace file="${jandex.module.dir}/module.xml" token="jandex-2.0.1.Final.jar" value="jandex-2.2.3.Final.jar" />
+        <delete file="${jandex.module.dir}/jandex-2.0.1.Final.jar" failonerror="false" />
+    </target>
+
+    <!-- Overlay complete standalone/ from SIP Servlets distro (handles buggy Ant unzip) -->
+    <target name="overlay-standalone">
+        <echo>Overlaying standalone/ from ${sip.servlets.zip}</echo>
+        <available file="${sip.servlets.zip}" property="sip.servlets.zip.exists" />
+        <fail unless="sip.servlets.zip.exists" message="SIP Servlets zip not found: ${sip.servlets.zip}" />
+
+        <mkdir dir="${sip.temp.dir}" />
+        <exec executable="powershell" dir="${sip.temp.dir}">
+            <arg value="-Command" />
+            <arg value="Expand-Archive -Path '${sip.servlets.zip}' -DestinationPath '${sip.temp.dir}' -Force" />
+        </exec>
+
+        <!-- Copy standalone/** from any root folder name inside the zip -->
+        <copy todir="${jboss.home}/standalone" overwrite="true">
+            <fileset dir="${sip.temp.dir}">
+                <include name="*/standalone/**" />
+            </fileset>
+            <cutdirsmapper dirs="2" />
+        </copy>
+
+        <!-- Apply pre-patched standalone.xml -->
+        <copy file="${patched.standalone.xml}" tofile="${jboss.home}/standalone/configuration/standalone.xml" overwrite="true" />
+
+        <delete dir="${sip.temp.dir}" />
+    </target>
+
+    <!-- Clean up any stale deployments -->
+    <target name="clean-up-distro">
+        <delete includeemptydirs="true" failonerror="false">
+            <fileset dir="${deploy.dir}">
+                <include name="*.jar" />
+                <include name="*.war" />
+            </fileset>
+        </delete>
+    </target>
+
+    <target name="build-ussd">
+        <exec failonerror="true" executable="${mvn.executable}" dir="${restcomm.ussd.dir}">
+            <arg line="${release.build.goals}" />
+        </exec>
+    </target>
+
+    <target name="copy-ussd">
+        <mkdir dir="${release.dir}/extra" />
+
+        <!-- deploy: jSS7 modules from local workspace -->
+        <echo>Deploying jSS7 modules from local workspace</echo>
+        <property name="jss7.modules.target" value="${jss7.dir}/service/wildfly/modules/target/module"/>
+        <property name="jss7.extension.target" value="${jss7.dir}/service/wildfly/extension/target/module"/>
+        <property name="jss7.commons.target" value="${jss7.dir}/service/wildfly/restcomm-ss7-wildfly-commons/target/module"/>
+
+        <mkdir dir="${jboss.modules.path}/org/restcomm/ss7/modules/main"/>
+        <copy todir="${jboss.modules.path}/org/restcomm/ss7/modules/main" overwrite="true">
+            <fileset dir="${jss7.modules.target}/main">
+                <include name="**/*.jar"/>
+            </fileset>
+        </copy>
+        <copy todir="${jboss.modules.path}/org/restcomm/ss7/modules/main" overwrite="true">
+            <fileset dir="${jss7.modules.target}/main">
+                <include name="module.xml"/>
+            </fileset>
+            <filterset>
+                <filter token="project.version" value="${restcomm-jss7.version}"/>
+            </filterset>
+        </copy>
+
+        <mkdir dir="${jboss.modules.path}/org/restcomm/ss7/extension/main"/>
+        <copy todir="${jboss.modules.path}/org/restcomm/ss7/extension/main" overwrite="true">
+            <fileset dir="${jss7.extension.target}/main">
+                <include name="**/*"/>
+            </fileset>
+        </copy>
+
+        <mkdir dir="${jboss.modules.path}/org/restcomm/ss7/commons/main"/>
+        <copy todir="${jboss.modules.path}/org/restcomm/ss7/commons/main" overwrite="true">
+            <fileset dir="${jss7.commons.target}/main">
+                <include name="**/*"/>
+            </fileset>
+        </copy>
+        <!-- javolution is referenced by commons module.xml but not copied by maven-assembly-plugin -->
+        <copy file="${m2.repo}/javolution/javolution/5.5.1/javolution-5.5.1.jar" todir="${jboss.modules.path}/org/restcomm/ss7/commons/main" overwrite="true" />
+
+        <!-- deploy: SIP javax.servlet.sip modules -->
+        <echo>Copying SIP servlet modules</echo>
+        <mkdir dir="${jboss.modules.path}/org/mobicents/javax/servlet/sip/main"/>
+        <copy todir="${jboss.modules.path}/org/mobicents/javax/servlet/sip/main" overwrite="true">
+            <fileset dir="${base.dir}/sip-modules/org/mobicents/javax/servlet/sip/main">
+                <include name="**/*"/>
+            </fileset>
+        </copy>
+
+        <!-- deploy: SLEE container modules from local workspace -->
+        <echo>Copy SLEE container modules from local workspace</echo>
+        <mkdir dir="${jboss.modules.path}/org/restcomm/slee/container/lib/main" />
+        <copy todir="${jboss.modules.path}/org/restcomm/slee/container/lib/main" overwrite="true">
+            <fileset dir="${jain-slee.dir}/container/build/as7/modules/target/module/main">
+                <include name="**" />
+            </fileset>
+        </copy>
+        <mkdir dir="${jboss.modules.path}/org/restcomm/slee/container/extension/main" />
+        <copy todir="${jboss.modules.path}/org/restcomm/slee/container/extension/main" overwrite="true">
+            <fileset dir="${jain-slee.dir}/container/build/as7/extension/target/module/main">
+                <include name="**" />
+            </fileset>
+        </copy>
+
+        <!-- Apply pre-patched SLEE module.xml with USSD bootstrap dependency -->
+        <copy file="${patched.slee.module.xml}" tofile="${jboss.modules.path}/org/restcomm/slee/container/lib/main/module.xml" overwrite="true" />
+
+        <!-- deploy: ussd extensions -->
+        <echo>Copy USSD extensions</echo>
+        <mkdir dir="${jboss.modules.path}/org/mobicents/ussd/bootstrap/main" />
+        <copy todir="${jboss.modules.path}/org/mobicents/ussd/bootstrap/main" overwrite="true">
+            <fileset dir="${restcomm.ussd.dir}/core/bootstrap-wildfly/target/module/main">
+                <include name="**" />
+            </fileset>
+        </copy>
+        <!-- deploy: USSD service DU and management war -->
+        <echo>Copy USSD Gateway DUs</echo>
+        <copy file="${restcomm.ussd.dir}/core/slee/services-du/target/services-DU-${restcomm.ussd.release.version}.jar" todir="${deploy.dir}" failonerror="true" />
+        <copy file="${restcomm.ussd.dir}/management/ussd-management/target/ussd-management.war" todir="${deploy.dir}" failonerror="true" />
+
+        <!-- deploy: MAP RA DU from local workspace -->
+        <echo>Copy RestComm MAP RA DU from local workspace</echo>
+        <copy file="${jain-slee-ss7.dir}/resources/map/du/target/restcomm-slee-ra-map-du-${restcomm-map-ra.version}.jar" todir="${deploy.dir}" failonerror="true" />
+
+        <!-- deploy: SIP11 RA DU from local workspace -->
+        <echo>Copy RestComm SIP11 RA DU from local workspace</echo>
+        <copy file="${jain-slee-sip.dir}/resources/sip11/du/target/sip11-ra-DU-${restcomm-slee.sip.version}.jar" todir="${deploy.dir}" failonerror="true" />
+
+        <!-- deploy: HTTP Client RA DU from Maven local repo (newest 7.2.0-113) -->
+        <echo>Copy RestComm HTTP Client RA DU from local .m2</echo>
+        <copy file="${m2.repo}/org/mobicents/resources/http-client-ra-DU/${restcomm-slee.http.version}/http-client-ra-DU-${restcomm-slee.http.version}.jar" todir="${deploy.dir}" failonerror="true" />
+
+        <!-- deploy: HTTP Servlet RA DU from Maven local repo (newest 7.2.0-113) -->
+        <echo>Copy RestComm HTTP Servlet RA DU from local .m2</echo>
+        <copy file="${m2.repo}/org/mobicents/resources/http-servlet-ra-DU/${restcomm-slee.http.version}/http-servlet-ra-DU-${restcomm-slee.http.version}.jar" todir="${deploy.dir}" failonerror="true" />
+
+        <!-- deploy: JDBC RA DU from Maven local repo (newest 7.2.0-113) -->
+        <echo>Copy RestComm JDBC RA DU from local .m2</echo>
+        <copy file="${m2.repo}/org/restcomm/resources/restcomm-slee-ra-jdbc-DU/${restcomm-slee.jdbc.version}/restcomm-slee-ra-jdbc-DU-${restcomm-slee.jdbc.version}.jar" todir="${deploy.dir}" failonerror="true" />
+
+        <!-- Copy javassist to wildfly/lib for Java 8/11 bytecode compatibility -->
+        <copy file="${javassist.jar}" todir="${jboss.home}/lib" overwrite="true" failonerror="false" />
+
+        <!-- deploy: jSS7 OAM UI from local workspace -->
+        <copy todir="${deploy.dir}" failonerror="true">
+            <fileset dir="${jss7.dir}/oam/new-ui/target">
+                <include name="*.war" />
+            </fileset>
+        </copy>
+
+        <!-- tools: jSS7 simulator from local workspace -->
+        <copy todir="${release.dir}/tools/restcomm-jss7-simulator" failonerror="true">
+            <fileset dir="${jss7.dir}/tools/simulator/bootstrap/target/simulator-ss7">
+                <include name="**" />
+            </fileset>
+        </copy>
+        <copy file="${restcomm.ussd.dir}/core/bootstrap/src/main/config/ss7-simulator/main_simulator2.xml" todir="${release.dir}/tools/restcomm-jss7-simulator/data" failonerror="true" />
+        <copy file="${restcomm.ussd.dir}/core/bootstrap/src/main/config/ss7-simulator/win_simulator2.xml" todir="${release.dir}/tools/restcomm-jss7-simulator/data" failonerror="true" />
+
+        <!-- tools: USSD simulator -->
+        <copy todir="${release.dir}/tools/restcomm-ussd-simulator" failonerror="true">
+            <fileset dir="${restcomm.ussd.dir}/test/bootstrap/target/ussd-server">
+                <include name="**" />
+            </fileset>
+        </copy>
+
+        <!-- CLI: USSD CLI and jSS7 shell -->
+        <copy file="${restcomm.ussd.dir}/core/oam/cli/target/ussd-cli-${restcomm.ussd.release.version}.jar" todir="${jboss.home}/lib" failonerror="true" />
+        <copy todir="${release.dir}/tools/restcomm-ss7-shell" failonerror="true">
+            <fileset dir="${jss7.dir}/management/shell-client/target/restcomm-cli">
+                <include name="**" />
+            </fileset>
+        </copy>
+
+        <!-- Copy default sample USSD config data to standalone/data for first-startup -->
+        <mkdir dir="${jboss.home}/standalone/data" />
+        <copy todir="${jboss.home}/standalone/data" failonerror="false">
+            <fileset dir="${restcomm.ussd.dir}/core/bootstrap/src/main/config/data">
+                <include name="UssdManagement_*.xml" />
+            </fileset>
+        </copy>
+
+        <!-- prepare simulator profile -->
+        <mkdir dir="${jboss.home}/simulator" />
+        <copy todir="${jboss.home}/simulator" failonerror="true">
+            <fileset dir="${jboss.home}/standalone">
+                <include name="**" />
+            </fileset>
+        </copy>
+        <mkdir dir="${jboss.home}/simulator/data" />
+        <copy todir="${jboss.home}/simulator/data" failonerror="true">
+            <fileset dir="${restcomm.ussd.dir}/core/bootstrap/src/main/config/data">
+                <include name="**" />
+            </fileset>
+        </copy>
+
+        <echo>Copy ussdhttpdemo.war to simulator</echo>
+        <copy file="${restcomm.ussd.dir}/examples/http/target/ussdhttpdemo.war" todir="${jboss.home}/simulator/deployments" failonerror="true" />
+    </target>
+
+    <target name="build-docs">
+        <exec failonerror="false" executable="${mvn.executable}" dir="${restcomm.ussd.dir}/docs">
+            <arg line="${release.build.goals} -Pall" />
+        </exec>
+    </target>
+
+    <target name="copy-docs">
+        <mkdir dir="${docs.dir}/jss7" />
+        <mkdir dir="${docs.dir}/ussd" />
+
+        <copy todir="${docs.dir}/ussd/adminguide/html-book" failonerror="false">
+            <fileset dir="${restcomm.ussd.dir}/docs/adminguide/sources-asciidoc/target/generated-docs/html-book">
+            </fileset>
+        </copy>
+        <copy todir="${docs.dir}/ussd/adminguide/pdf" failonerror="false">
+            <fileset dir="${restcomm.ussd.dir}/docs/adminguide/sources-asciidoc/target/generated-docs/pdf">
+                <include name="*.pdf" />
+            </fileset>
+        </copy>
+        <copy todir="${docs.dir}/ussd/installationguide/html-book" failonerror="false">
+            <fileset dir="${restcomm.ussd.dir}/docs/installationguide/sources-asciidoc/target/generated-docs/html-book">
+            </fileset>
+        </copy>
+        <copy todir="${docs.dir}/ussd/installationguide/pdf" failonerror="false">
+            <fileset dir="${restcomm.ussd.dir}/docs/installationguide/sources-asciidoc/target/generated-docs/pdf">
+                <include name="*.pdf" />
+            </fileset>
+        </copy>
+    </target>
+
+    <target name="make-final-zip" depends="set-time-stamp">
+        <zip destfile="${base.dir}/restcomm-ussd-${restcomm.ussd.release.version}.zip" filesonly="false">
+            <zipfileset dir="${release.dir}" prefix="restcomm-ussd-${restcomm.ussd.release.version}">
+                <include name="**" />
+            </zipfileset>
+        </zip>
+    </target>
+
+    <target name="set-time-stamp" unless="skip.timestamp">
+        <tstamp>
+            <format property="time.stamp" pattern="yyMMddHHmm" />
+        </tstamp>
+    </target>
+
+    <target name="bundle-documentation">
+        <echo>bundling documentation</echo>
+
+        <mkdir dir="${bundle.docs.dir}" />
+
+        <copy toDir="${bundle.docs.dir}" overwrite="true">
+            <fileset dir="${docs.dir}">
+                <include name="**" />
+            </fileset>
+        </copy>
+
+        <zip destfile="${base.dir}/restcomm-ussd-${restcomm.ussd.release.version}-docs.zip" filesonly="false">
+            <zipfileset dir="${bundle.docs.dir}" prefix="restcomm-ussd-${restcomm.ussd.release.version}/docs">
+                <include name="**/*" />
+            </zipfileset>
+        </zip>
+    </target>
+
+</project>

@@ -1,0 +1,290 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<packaging>war</packaging>
+	<parent>
+		<groupId>org.mobicents.ussd.examples</groupId>
+		<artifactId>parent</artifactId>
+		<version>7.2.1-SNAPSHOT</version>
+	</parent>
+
+	<artifactId>http-example</artifactId>
+	<name>Example : HTTP</name>
+
+	<dependencies>
+		<dependency>
+			<groupId>org.restcomm.protocols.ss7.tcap</groupId>
+			<artifactId>tcap-api</artifactId>
+			<version>${jss7.restcomm.version}</version>
+			<scope>compile</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.mobicents.ussd</groupId>
+			<artifactId>xml</artifactId>
+			<version>${project.version}</version>
+			<exclusions>
+				<!-- <exclusion> <groupId>org.mobicents.protocols.asn</groupId> <artifactId>asn</artifactId> </exclusion> -->
+
+				<exclusion>
+					<groupId>org.restcomm.protocols.ss7.congestion</groupId>
+					<artifactId>congestion</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>org.restcomm.protocols.ss7.isup</groupId>
+					<artifactId>isup-api</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>org.restcomm.protocols.ss7.isup</groupId>
+					<artifactId>isup-impl</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>org.restcomm.protocols.ss7.mtp</groupId>
+					<artifactId>mtp-api</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>org.restcomm.protocols.ss7.mtp</groupId>
+					<artifactId>mtp</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>org.restcomm.protocols.ss7.sccp</groupId>
+					<artifactId>sccp-api</artifactId>
+				</exclusion>
+
+<!--
+				<exclusion>
+					<groupId>org.restcomm.protocols.ss7.sccp</groupId>
+					<artifactId>sccp-impl</artifactId>
+				</exclusion>
+-->
+
+				<exclusion>
+					<groupId>org.restcomm.protocols.ss7.tcap</groupId>
+					<artifactId>tcap-api</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>org.restcomm.protocols.ss7.tcap</groupId>
+					<artifactId>tcap-impl</artifactId>
+				</exclusion>
+
+				<exclusion>
+					<groupId>log4j</groupId>
+					<artifactId>log4j</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>junit</groupId>
+					<artifactId>junit</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>org.testng</groupId>
+					<artifactId>testng</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
+			<groupId>javax.servlet</groupId>
+			<artifactId>servlet-api</artifactId>
+			<version>${servlet.version}</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>log4j</groupId>
+			<artifactId>log4j</artifactId>
+			<version>${log4j.version}</version>
+			<scope>provided</scope>
+		</dependency>
+        <dependency>
+            <artifactId>sccp-impl</artifactId>
+            <groupId>org.restcomm.protocols.ss7.sccp</groupId>
+            <version>${jss7.restcomm.version}</version>
+        </dependency>
+	</dependencies>
+	<build>
+		<finalName>ussdhttpdemo</finalName>
+		<plugins>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-war-plugin</artifactId>
+					<configuration>
+						<packagingExcludes>WEB-INF/lib/*/module-info.class,WEB-INF/lib/*/META-INF/versions/*/module-info.class</packagingExcludes>
+					</configuration>
+				</plugin>
+			<plugin>
+				<artifactId>maven-antrun-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>fix-activation-classpath</id>
+						<phase>package</phase>
+						<goals>
+							<goal>run</goal>
+						</goals>
+						<configuration>
+							<target>
+								<!-- mail-1.4.jar manifest references activation.jar via Class-Path -->
+								<!-- Copy activation-1.1.jar to activation.jar to satisfy the reference -->
+								<unzip overwrite="true" src="target/${project.build.finalName}.war" dest="target/war-fix" />
+								<copy file="target/war-fix/WEB-INF/lib/activation-1.1.jar" tofile="target/war-fix/WEB-INF/lib/activation.jar" />
+								<!-- Strip module-info.class from dependency JARs to prevent WildFly 10 indexing warnings (WFLYSRV0003) using pure Ant/Java -->
+								<echo message="Stripping module-info.class from dependency JARs..."/>
+								<mkdir dir="target/build-tools"/>
+								<echo file="target/build-tools/StripModuleInfo.java">import java.io.*;
+import java.util.zip.*;
+public class StripModuleInfo {
+    public static void main(String[] args) throws Exception {
+        System.out.println("Stripping module-info.class from JARs in: " + args[0]);
+        File libDir = new File(args[0]);
+        File[] files = libDir.listFiles();
+        if (files == null) return;
+        for (File jar : files) {
+            if (!jar.getName().endsWith(".jar")) continue;
+            File tmp = new File(jar.getAbsolutePath() + ".tmp");
+            try (FileInputStream fis = new FileInputStream(jar);
+                 ZipInputStream zis = new ZipInputStream(fis);
+                 FileOutputStream fos = new FileOutputStream(tmp);
+                 ZipOutputStream zos = new ZipOutputStream(fos)) {
+                ZipEntry entry;
+                while ((entry = zis.getNextEntry()) != null) {
+                    String name = entry.getName();
+                    if (name.equals("module-info.class") || name.contains("/module-info.class")) continue;
+                    zos.putNextEntry(entry);
+                    byte[] buf = new byte[4096];
+                    int read;
+                    while ((read = zis.read(buf)) != -1) zos.write(buf, 0, read);
+                    zos.closeEntry();
+                }
+            }
+            if (!jar.delete()) {
+                System.err.println("Failed to delete: " + jar.getAbsolutePath());
+                tmp.delete();
+                continue;
+            }
+            if (!tmp.renameTo(jar)) {
+                System.err.println("Failed to rename: " + tmp.getAbsolutePath());
+            } else {
+                System.out.println("Stripped: " + jar.getName());
+            }
+        }
+        System.out.println("Done stripping module-info.class");
+    }
+}
+</echo>
+								<javac srcdir="target/build-tools" destdir="target/build-tools"/>
+								<java classname="StripModuleInfo" classpath="target/build-tools" fork="true" failonerror="true">
+									<arg value="target/war-fix/WEB-INF/lib"/>
+								</java>
+								<delete dir="target/build-tools"/>
+								<zip basedir="target/war-fix" destfile="target/${project.build.finalName}.war" />
+								<sleep milliseconds="500"/>
+								<delete dir="target/war-fix" failonerror="false"/>
+							</target>
+						</configuration>
+					</execution>
+					<execution>
+						<id>prepare-jboss-jar</id>
+						<phase>package</phase>
+						<goals>
+							<goal>run</goal>
+						</goals>
+						<configuration>
+							<target>
+								<unzip overwrite="true" src="target/${project.build.finalName}.war" dest="target/jboss-pack" />
+								<replace file="target/jboss-pack/WEB-INF/jboss-web.xml"
+									value=""
+									token="&lt;!-- class-loading insertion" />
+								<replace file="target/jboss-pack/WEB-INF/jboss-web.xml"
+									value=""
+									token="class-loading insertion --&gt;" />
+								<zip basedir="target/jboss-pack" destfile="target/ussdhttpdemo-jboss.war" />
+							</target>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
+
+	<profiles>
+		<profile>
+			<!-- Adds the files to JBoss AS -->
+			<id>deploy-examples-jboss5</id>
+			<build>
+				<plugins>
+					<plugin>
+						<artifactId>maven-antrun-plugin</artifactId>
+						<executions>
+							<execution>
+								<id>deploy</id>
+								<phase>install</phase>
+								<goals>
+									<goal>run</goal>
+								</goals>
+								<configuration>
+									<target>
+										<echo>
+											${jboss.home}server/default/deploy
+										</echo>
+										<copy file="${project.build.directory}/ussdhttpdemo-jboss.war" todir="${jboss.home}/server/${node}/deploy" />
+									</target>
+								</configuration>
+							</execution>
+							<execution>
+								<id>undeploy</id>
+								<phase>clean</phase>
+								<goals>
+									<goal>run</goal>
+								</goals>
+								<configuration>
+									<target>
+										<delete file="${jboss.home}/server/${node}/deploy/ussdhttpdemo-jboss.war" failonerror="false">
+										</delete>
+									</target>
+								</configuration>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<profile>
+			<!-- Adds the files to WildFly server -->
+			<id>deploy-examples-wildfly</id>
+			<build>
+				<plugins>
+					<plugin>
+						<artifactId>maven-antrun-plugin</artifactId>
+						<executions>
+							<execution>
+								<id>deploy</id>
+								<phase>install</phase>
+								<goals>
+									<goal>run</goal>
+								</goals>
+								<configuration>
+									<target>
+										<echo>
+											${jboss.home}server/default/deploy
+										</echo>
+										<copy file="${project.build.directory}/ussdhttpdemo.war" todir="${jboss.home}/standalone/deployments" />
+									</target>
+								</configuration>
+							</execution>
+							<execution>
+								<id>undeploy</id>
+								<phase>clean</phase>
+								<goals>
+									<goal>run</goal>
+								</goals>
+								<configuration>
+									<target>
+										<delete file="${jboss.home}/standalone/deployments/ussdhttpdemo.war" failonerror="false">
+										</delete>
+									</target>
+								</configuration>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>		
+</project>
+

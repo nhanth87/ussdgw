@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+
+	<!-- Model Version -->
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>org.mobicents.ussd</groupId>
+		<artifactId>core</artifactId>
+		<version>7.2.1-SNAPSHOT</version>
+	</parent>
+
+	<packaging>jar</packaging>
+
+
+	<artifactId>domain</artifactId>
+	<name>Core : Domain</name>
+	<description>USSD Gateway Domain Object</description>
+
+	<dependencies>
+        <dependency>
+            <artifactId>statistics-api</artifactId>
+            <groupId>org.restcomm.protocols.ss7.statistics</groupId>
+            <version>${jss7.restcomm.version}</version>
+        </dependency>
+        <dependency>
+            <artifactId>statistics-impl</artifactId>
+            <groupId>org.restcomm.protocols.ss7.statistics</groupId>
+            <version>${jss7.restcomm.version}</version>
+        </dependency>
+        
+		<dependency>
+			<groupId>org.restcomm.protocols.ss7.map</groupId>
+			<artifactId>map-impl</artifactId>
+			<version>${jss7.restcomm.version}</version>
+		</dependency>        
+
+		<!-- Jackson XML for high-performance XML serialization -->
+		<dependency>
+			<groupId>com.fasterxml.jackson.dataformat</groupId>
+			<artifactId>jackson-dataformat-xml</artifactId>
+			<version>2.15.2</version>
+		</dependency>
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-databind</artifactId>
+			<version>2.15.2</version>
+		</dependency>
+
+		<dependency>
+			<groupId>log4j</groupId>
+			<artifactId>log4j</artifactId>
+			<version>${log4j.version}</version>
+		</dependency>
+		<dependency>
+			<!-- This comes in container. -->
+			<groupId>org.jboss.jbossas</groupId>
+			<artifactId>jboss-as-system-jmx</artifactId>
+			<version>${jboss.version}</version>
+			<scope>compile</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testng</groupId>
+			<artifactId>testng</artifactId>
+			<version>${testng.version}</version>
+			<scope>test</scope>
+		</dependency>		
+
+		<dependency>
+			<groupId>org.restcomm.commons</groupId>
+			<artifactId>restcomm-statistics</artifactId>
+			<version>${restcomm.commons.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>io.dropwizard.metrics</groupId>
+			<artifactId>metrics-core</artifactId>
+			<version>${metrics.version}</version>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-jar-plugin</artifactId>
+				<configuration>
+					<archive>
+						<addMavenDescriptor>false</addMavenDescriptor>
+					</archive>
+				</configuration>
+			</plugin>
+		</plugins>
+
+		<resources>
+			<resource>
+				<directory>src/main/resources</directory>
+				<filtering>true</filtering>
+			</resource>
+		</resources>
+	</build>
+
+</project>

@@ -1,0 +1,273 @@
+/*
+ * TeleStax, Open Source Cloud Communications
+ * Copyright 2011-2017, Telestax Inc and individual contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation; either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * REPLACED: javolution.xml with Jackson XML annotations
+ * 100% API Compatible with original
+ */
+package org.mobicents.ussdgateway;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+import org.restcomm.protocols.ss7.map.api.MAPException;
+import org.restcomm.protocols.ss7.map.api.MAPProvider;
+import org.restcomm.protocols.ss7.map.api.datacoding.CBSDataCodingGroup;
+import org.restcomm.protocols.ss7.map.api.datacoding.CBSDataCodingScheme;
+import org.restcomm.protocols.ss7.map.api.datacoding.CBSNationalLanguage;
+import org.restcomm.protocols.ss7.map.api.errors.MAPErrorCode;
+import org.restcomm.protocols.ss7.map.api.errors.MAPErrorMessage;
+import org.restcomm.protocols.ss7.map.api.primitives.USSDString;
+import org.restcomm.protocols.ss7.map.api.smstpdu.CharacterSet;
+import org.restcomm.protocols.ss7.map.datacoding.CBSDataCodingSchemeImpl;
+
+/**
+ * @author sergey vetyutnev
+ * @author Matrix Agent
+ */
+@JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class SipUssdMessage {
+
+    public static final String USSD_DATA = "ussd-data";
+    public static final String LANGUAGE = "language";
+    public static final String USSD_STRING = "ussd-string";
+    public static final String ERROR_CODE = "error-code";
+    public static final String ANY_EXT = "anyExt";
+
+    @JsonProperty(LANGUAGE)
+    private String language;
+
+    @JsonProperty(USSD_STRING)
+    private String ussdString;
+
+    @JsonProperty(ERROR_CODE)
+    private int errorCode;
+
+    @JsonProperty(ANY_EXT)
+    private AnyExt anyExt;
+
+    public SipUssdMessage() {
+    }
+
+    public SipUssdMessage(String ussdString, String language) {
+        this.ussdString = ussdString;
+        this.language = language;
+    }
+
+    public SipUssdMessage(int errorCode) {
+        this.errorCode = errorCode;
+    }
+
+    public SipUssdMessage(CBSDataCodingScheme dataCodingScheme, USSDString sourceUSSDString) throws MAPException {
+        this.ussdString = sourceUSSDString.getString(null);
+
+        if (dataCodingScheme.getNationalLanguageShiftTable() == null
+                || dataCodingScheme.getNationalLanguageShiftTable() == CBSNationalLanguage.LanguageUnspecified) {
+            if (dataCodingScheme.getCharacterSet() == CharacterSet.GSM7)
+                this.language = "en";
+        } else {
+            switch (dataCodingScheme.getNationalLanguageShiftTable()) {
+            case German:
+                this.language = "de";
+                break;
+            case English:
+                this.language = "en";
+                break;
+            case Italian:
+                this.language = "it";
+                break;
+            case French:
+                this.language = "fr";
+                break;
+            case Spanish:
+                this.language = "es";
+                break;
+            case Dutch:
+                this.language = "nl";
+                break;
+            case Swedish:
+                this.language = "sv";
+                break;
+            case Danish:
+                this.language = "da";
+                break;
+            case Portuguese:
+                this.language = "pt";
+                break;
+            case Finnish:
+                this.language = "fi";
+                break;
+            case Norwegian:
+                this.language = "nb";
+                break;
+            case Greek:
+                this.language = "el";
+                break;
+            case Turkish:
+                this.language = "tr";
+                break;
+            case Hungarian:
+                this.language = "hu";
+                break;
+            case Polish:
+                this.language = "pl";
+                break;
+            case Czech:
+                this.language = "cs";
+                break;
+            case Hebrew:
+                this.language = "he";
+                break;
+            case Arabic:
+                this.language = "ar";
+                break;
+            case Russian:
+                this.language = "ru";
+                break;
+            case Icelandic:
+                this.language = "is";
+                break;
+            }
+        }
+    }
+
+    public SipUssdMessage(SipUssdErrorCode sipUssdErrorCode) {
+        if (sipUssdErrorCode != null)
+            this.errorCode = sipUssdErrorCode.getCode();
+    }
+
+    public String getLanguage() {
+        return language;
+    }
+
+    public String getUssdString() {
+        return ussdString;
+    }
+
+    public int getErrorCodeNumeric() {
+        return errorCode;
+    }
+
+    public SipUssdErrorCode getErrorCode() {
+        return SipUssdErrorCode.getSipUssdErrorCode(errorCode);
+    }
+
+    public AnyExt getAnyExt() {
+        return anyExt;
+    }
+
+    public void setAnyExt(AnyExt anyExt) {
+        this.anyExt = anyExt;
+    }
+
+    public boolean isSuccessMessage() {
+        if (this.errorCode == 0 && this.ussdString != null)
+            return true;
+        else
+            return false;
+    }
+
+    public boolean isErrorMessage() {
+        return !this.isSuccessMessage();
+    }
+
+    public static CBSDataCodingScheme getCBSDataCodingSchemeForLanguage(String language) {
+        CBSDataCodingScheme res = null;
+
+        if (language == null) {
+            res = new CBSDataCodingSchemeImpl(CBSDataCodingGroup.GeneralGsm7, CharacterSet.GSM7, null, null, false);
+        } else {
+            if (language.equals("en") || language.equals("de")) {
+                res = new CBSDataCodingSchemeImpl(CBSDataCodingGroup.GeneralGsm7, CharacterSet.GSM7, null, null, false);
+            } else {
+                res = new CBSDataCodingSchemeImpl(CBSDataCodingGroup.GeneralDataCodingIndication, CharacterSet.UCS2,
+                        null, null, false);
+            }
+        }
+
+        return res;
+    }
+
+    public CBSDataCodingScheme getCBSDataCodingScheme() {
+        if (!this.isSuccessMessage())
+            return null;
+
+        return getCBSDataCodingSchemeForLanguage(this.language);
+    }
+
+    public USSDString getUSSDString(MAPProvider mapProvider) throws MAPException {
+        if (!this.isSuccessMessage())
+            return null;
+
+        USSDString res = mapProvider.getMAPParameterFactory().createUSSDString(this.ussdString,
+                getCBSDataCodingScheme(), null);
+        return res;
+    }
+
+    public MAPErrorMessage getMAPErrorMessage(MAPProvider mapProvider) {
+        if (this.isSuccessMessage())
+            return null;
+
+        MAPErrorMessage res;
+        switch (this.getErrorCode()) {
+        case languageAlphabitNotSupported:
+            res = mapProvider.getMAPErrorMessageFactory().createMAPErrorMessageExtensionContainer(
+                    (long) MAPErrorCode.unknownAlphabet, null);
+            break;
+        case unexpectedDataValue:
+            res = mapProvider.getMAPErrorMessageFactory().createMAPErrorMessageExtensionContainer(
+                    (long) MAPErrorCode.unexpectedDataValue, null);
+            break;
+        default:
+            res = mapProvider.getMAPErrorMessageFactory().createMAPErrorMessageSystemFailure(2, null, null, null);
+            break;
+        }
+        return res;
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+
+        sb.append("SipUssdMessage [");
+
+        if (this.ussdString != null) {
+            sb.append("ussdString=");
+            sb.append(this.ussdString);
+            sb.append(",");
+        }
+        if (this.language != null) {
+            sb.append("language=");
+            sb.append(this.language);
+            sb.append(",");
+        }
+        if (this.errorCode != 0) {
+            sb.append("errorCode=");
+            SipUssdErrorCode ec = SipUssdErrorCode.getSipUssdErrorCode(this.errorCode);
+            if (ec != null)
+                sb.append(ec);
+            else
+                sb.append(this.errorCode);
+            sb.append(",");
+        }
+
+        sb.append("]");
+
+        return sb.toString();
+    }
+}

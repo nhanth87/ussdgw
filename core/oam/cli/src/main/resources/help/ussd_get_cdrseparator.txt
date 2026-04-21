@@ -1,0 +1,11 @@
+Name
+	ussd get cdrloggingto
+
+SYNOPSIS
+	ussd get cdrloggingto
+
+DESCRIPTION
+	This command is used to get a CDR TextFile logging fields separator.
+
+SEE ALSO
+	ussd set cdrloggingto, ussd set cdrseparator
