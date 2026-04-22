@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 
+  Deploy config for USSD Gateway Services DU.
+  
+  This ensures HTTP Servlet RA entity is activated before USSD services start.
+  The HTTP Servlet RA entity 'HttpServletRA' is required by HttpServerSbb to
+  receive HTTP requests via restcomm.war.
+-->
+<deploy-config>
+	<!-- Activate HTTP Servlet RA entity if not already active -->
+	<ra-entity
+		resource-adaptor-id="ResourceAdaptorID[name=HttpServletResourceAdaptor,vendor=org.restcomm,version=1.0]"
+		entity-name="HttpServletRA">
+		<properties>
+			<property name="name" type="java.lang.String" value="restcomm" />
+			<property name="HTTP_REQUEST_TIMEOUT" type="java.lang.Integer" value="65000" />
+		</properties>
+		<ra-link name="HttpServletRA" />
+	</ra-entity>
+</deploy-config>

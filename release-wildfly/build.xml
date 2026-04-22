@@ -39,8 +39,8 @@
     <property name="jain-slee-sip.dir" value="${restcomm.ussd.dir}/../jain-slee.sip" />
 
     <!-- Dependency versions from local -->
-    <property name="restcomm-jss7.version" value="9.2.10" />
-    <property name="restcomm-map-ra.version" value="9.2.10" />
+    <property name="restcomm-jss7.version" value="9.2.11" />
+    <property name="restcomm-map-ra.version" value="9.2.9" />
     <property name="restcomm-slee.http.version" value="7.0.0-SNAPSHOT" />
     <property name="restcomm-slee.jdbc.version" value="7.0.0-SNAPSHOT" />
     <property name="restcomm-slee.sip.version" value="7.0.0-SNAPSHOT" />
@@ -203,7 +203,7 @@
         <echo>Copy HTTP Servlet RA common module</echo>
         <mkdir dir="${jboss.modules.path}/org/restcomm/slee/resource/http/common/main"/>
         <copy todir="${jboss.modules.path}/org/restcomm/slee/resource/http/common/main" overwrite="true">
-            <fileset dir="${jain-slee-http.dir}/resources/http-servlet/du/target/classes/jars">
+            <fileset dir="${jain-slee-http.dir}/resources/http-servlet/common/target">
                 <include name="restcomm-slee-ra-http-servlet-common.jar"/>
             </fileset>
             <fileset dir="${jain-slee-http.dir}/resources/http-servlet/common/src/main/module">
