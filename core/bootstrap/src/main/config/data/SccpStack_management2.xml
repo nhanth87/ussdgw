@@ -1,10 +1,28 @@
-<?xml version="1.0" encoding="UTF-8" ?>
-<zmarginxudtmessage value="240"/>
-<reassemblytimerdelay value="15000"/>
-<maxdatamessage value="2560"/>
-<removespc value="true"/>
-<previewMode value="false"/>
-<sccpProtocolVersion value="ITU"/>
-<ssttimerduration_min value="10000"/>
-<ssttimerduration_max value="600000"/>
-<ssttimerduration_increasefactor value="1.5"/>
+<?xml version="1.0" encoding="UTF-8"?>
+<SccpConfig>
+  <zMarginXudtMessage>240</zMarginXudtMessage>
+  <connEstTimerDelay>15000</connEstTimerDelay>
+  <iasTimerDelay>450000</iasTimerDelay>
+  <iarTimerDelay>960000</iarTimerDelay>
+  <relTimerDelay>15000</relTimerDelay>
+  <repeatRelTimerDelay>15000</repeatRelTimerDelay>
+  <intTimerDelay>30000</intTimerDelay>
+  <guardTimerDelay>1440000</guardTimerDelay>
+  <resetTimerDelay>15000</resetTimerDelay>
+  <reassemblyTimerDelay>15000</reassemblyTimerDelay>
+  <maxDataMessage>2560</maxDataMessage>
+  <periodOfLogging>60000</periodOfLogging>
+  <removeSpc>true</removeSpc>
+  <respectPc>false</respectPc>
+  <canRelay>false</canRelay>
+  <timerExecutorsThreadCount>10</timerExecutorsThreadCount>
+  <previewMode>false</previewMode>
+  <sccpProtocolVersion>ITU</sccpProtocolVersion>
+  <congControl_TIMER_A>400</congControl_TIMER_A>
+  <congControl_TIMER_D>2000</congControl_TIMER_D>
+  <congControl_Algo>international</congControl_Algo>
+  <congControl_blockingOutgoingSccpMessages>false</congControl_blockingOutgoingSccpMessages>
+  <sstTimerDuration_Min>10000</sstTimerDuration_Min>
+  <sstTimerDuration_Max>600000</sstTimerDuration_Max>
+  <sstTimerDuration_IncreaseFactor>1.5</sstTimerDuration_IncreaseFactor>
+</SccpConfig>
