@@ -199,6 +199,18 @@
             </fileset>
         </copy>
 
+        <!-- deploy: HTTP Servlet RA common module (needed by restcomm.war) -->
+        <echo>Copy HTTP Servlet RA common module</echo>
+        <mkdir dir="${jboss.modules.path}/org/restcomm/slee/resource/http/common/main"/>
+        <copy todir="${jboss.modules.path}/org/restcomm/slee/resource/http/common/main" overwrite="true">
+            <fileset dir="${jain-slee-http.dir}/resources/http-servlet/du/target/classes/jars">
+                <include name="restcomm-slee-ra-http-servlet-common.jar"/>
+            </fileset>
+            <fileset dir="${jain-slee-http.dir}/resources/http-servlet/common/src/main/module">
+                <include name="module.xml"/>
+            </fileset>
+        </copy>
+
         <!-- deploy: SLEE container modules from local workspace -->
         <echo>Copy SLEE container modules from local workspace</echo>
         <mkdir dir="${jboss.modules.path}/org/restcomm/slee/container/lib/main" />
@@ -292,7 +304,15 @@
             </fileset>
         </copy>
 
-        <!-- prepare simulator profile -->
+        <!-- Copy ussdhttpdemo.war to standalone BEFORE cloning to simulator -->
+        <echo>Copy ussdhttpdemo.war to standalone deployments</echo>
+        <copy file="${restcomm.ussd.dir}/examples/http/target/ussdhttpdemo.war" todir="${jboss.home}/standalone/deployments" failonerror="true" />
+
+        <!-- Copy restcomm.war to standalone BEFORE cloning to simulator -->
+        <echo>Copy restcomm.war to standalone deployments</echo>
+        <copy file="${jain-slee-http.dir}/resources/http-servlet/war/target/restcomm.war" todir="${jboss.home}/standalone/deployments" failonerror="true" />
+
+        <!-- prepare simulator profile - clone standalone (now includes both wars) -->
         <mkdir dir="${jboss.home}/simulator" />
         <copy todir="${jboss.home}/simulator" failonerror="true">
             <fileset dir="${jboss.home}/standalone">
@@ -305,9 +325,6 @@
                 <include name="**" />
             </fileset>
         </copy>
-
-        <echo>Copy ussdhttpdemo.war to simulator</echo>
-        <copy file="${restcomm.ussd.dir}/examples/http/target/ussdhttpdemo.war" todir="${jboss.home}/simulator/deployments" failonerror="true" />
     </target>
 
     <target name="build-docs">
