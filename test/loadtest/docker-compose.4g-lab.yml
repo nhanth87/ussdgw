@@ -1,0 +1,151 @@
+version: '3.8'
+
+# ============================================================
+# USSD Gateway 4G Test Lab - Docker Compose
+# Target: 10k TPS testing environment
+# ============================================================
+
+services:
+  # USSD Gateway (WildFly 10 + USSD GW)
+  ussdgateway:
+    image: openjdk:8-jdk
+    container_name: ussd-gw-4g
+    hostname: ussdgateway
+    
+    environment:
+      - JAVA_OPTS=-XX:+UseG1GC -Xms4g -Xmx4g -XX:MaxGCPauseMillis=20
+      - JBOSS_HOME=/opt/wildfly
+    
+    volumes:
+      - ./../../../product/restcomm-ussd-7.2.1-SNAPSHOT.zip:/tmp/ussd.zip:ro
+      - ./docker-data/ussd-config:/opt/wildfly/standalone/data
+    
+    ports:
+      - "8080:8080"    # HTTP interface
+      - "9990:9990"    # Management
+      - "2905:2905"    # SCTP M3UA
+      - "8011-8012:8011-8012"  # SCTP associations
+    
+    networks:
+      ussd-4g-net:
+        ipv4_address: 172.20.0.10
+    
+    sysctls:
+      - net.core.rmem_max=16777216
+      - net.core.wmem_max=16777216
+      - net.ipv4.tcp_rmem=4096 87380 16777216
+      - net.ipv4.tcp_wmem=4096 65536 16777216
+    
+    ulimits:
+      nofile:
+        soft: 200000
+        hard: 200000
+    
+    command: >
+      bash -c "
+        cd /opt &&
+        unzip -q /tmp/ussd.zip -d . &&
+        cd wildfly-10.0.0.Final/bin &&
+        ./standalone.sh -b 0.0.0.0 -bmanagement 0.0.0.0
+      "
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Load Generator Client
+  load-generator:
+    image: openjdk:8-jdk
+    container_name: ussd-load-gen
+    
+    environment:
+      - JAVA_OPTS=-XX:+UseG1GC -Xms8g -Xmx8g -XX:MaxGCPauseMillis=20
+      - TARGET_TPS=10000
+      - WORKER_THREADS=40
+      - BASE_URL=http://ussdgateway:8080/ussdhttpdemo/
+    
+    volumes:
+      - ./target:/app:ro
+      - ./results:/results
+    
+    networks:
+      ussd-4g-net:
+        ipv4_address: 172.20.0.20
+    
+    sysctls:
+      - net.core.rmem_max=16777216
+      - net.core.wmem_max=16777216
+    
+    ulimits:
+      nofile:
+        soft: 200000
+        hard: 200000
+    
+    command: >
+      bash -c "
+        echo 'Waiting for USSD Gateway...' &&
+        sleep 30 &&
+        cd /app &&
+        java $$JAVA_OPTS 
+          -cp 'loadtest-7.2.1-SNAPSHOT.jar:dependency/*'
+          org.mobicents.ussd.loadtest.UssdHttpLoadGenerator
+          $$BASE_URL $$TARGET_TPS $$WORKER_THREADS 50000
+      "
+    
+    depends_on:
+      - ussdgateway
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '8'
+          memory: 10G
+        reservations:
+          cpus: '4'
+          memory: 8G
+
+  # Prometheus Metrics (optional)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ussd-prometheus
+    
+    volumes:
+      - ./docker-data/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    
+    ports:
+      - "9090:9090"
+    
+    networks:
+      - ussd-4g-net
+    
+    profiles:
+      - monitoring
+
+  # Grafana Dashboard (optional)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ussd-grafana
+    
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    
+    ports:
+      - "3000:3000"
+    
+    networks:
+      - ussd-4g-net
+    
+    depends_on:
+      - prometheus
+    
+    profiles:
+      - monitoring
+
+networks:
+  ussd-4g-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24

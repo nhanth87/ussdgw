@@ -128,6 +128,9 @@
         <!-- Apply pre-patched standalone.xml -->
         <copy file="${patched.standalone.xml}" tofile="${jboss.home}/standalone/configuration/standalone.xml" overwrite="true" />
 
+        <!-- Patch standalone.conf to use standalone.xml instead of standalone-sip.xml -->
+        <replace file="${jboss.home}/bin/standalone.conf" token='JAVA_OPTS="$JAVA_OPTS -Djboss.server.default.config=standalone-sip.xml"' value='JAVA_OPTS="$JAVA_OPTS -Djboss.server.default.config=standalone.xml"' />
+
         <delete dir="${sip.temp.dir}" />
     </target>
 
@@ -281,11 +284,11 @@
             </fileset>
         </copy>
 
-        <!-- Copy default sample USSD config data to standalone/data for first-startup -->
+        <!-- Copy default sample SS7/USSD config data to standalone/data for first-startup -->
         <mkdir dir="${jboss.home}/standalone/data" />
         <copy todir="${jboss.home}/standalone/data" failonerror="false">
             <fileset dir="${restcomm.ussd.dir}/core/bootstrap/src/main/config/data">
-                <include name="UssdManagement_*.xml" />
+                <include name="*.xml" />
             </fileset>
         </copy>
 
