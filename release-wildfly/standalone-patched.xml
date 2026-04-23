@@ -133,7 +133,7 @@
             <default-bindings context-service="java:jboss/ee/concurrency/context/default" datasource="java:jboss/datasources/ExampleDS" managed-executor-service="java:jboss/ee/concurrency/executor/default" managed-scheduled-executor-service="java:jboss/ee/concurrency/scheduler/default" managed-thread-factory="java:jboss/ee/concurrency/factory/default"/>
         </subsystem>
         <subsystem xmlns="urn:restcomm:slee-container:3.0">
-            <cache-config>jain-slee-cache-config.xml</cache-config>
+            <cache-config><![CDATA[<infinispan xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:infinispan:config:8.1 http://www.infinispan.org/schemas/infinispan-config-8.1.xsd" xmlns="urn:infinispan:config:8.1"><cache-container default-cache="default" statistics="false" shutdown-hook="DONT_REGISTER"><local-cache name="default"><locking isolation="REPEATABLE_READ" acquire-timeout="30000" striping="false" /><transaction mode="BATCH"/></local-cache></cache-container></infinispan>]]></cache-config>
         </subsystem>
         <subsystem xmlns="urn:jboss:domain:ejb3:4.0">
             <session-bean>

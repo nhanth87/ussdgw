@@ -21,6 +21,13 @@
 			<groupId>org.mobicents.servers.jainslee.api</groupId>
 			<artifactId>jain-slee-11-ext</artifactId>
 			<version>${restcomm.core.ext.version}</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>javax.servlet</groupId>
+			<artifactId>servlet-api</artifactId>
+			<version>${servlet.version}</version>
+			<scope>provided</scope>
 		</dependency>
 		<dependency>
 			<artifactId>restcomm-slee-ra-map-ratype</artifactId>
@@ -56,6 +63,10 @@
                 <exclusion>
                     <groupId>org.mobicents.tools</groupId>
                     <artifactId>sip-balancer-jar</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.mobicents.servers.jainslee.core</groupId>
+                    <artifactId>spi</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
