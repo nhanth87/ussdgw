@@ -58,7 +58,7 @@
 			<groupId>org.jboss.jbossas</groupId>
 			<artifactId>jboss-as-system-jmx</artifactId>
 			<version>${jboss.version}</version>
-			<scope>compile</scope>
+			<scope>provided</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.testng</groupId>
