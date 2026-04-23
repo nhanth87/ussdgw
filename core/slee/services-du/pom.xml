@@ -1,4 +1,4 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+﻿<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 
 	<modelVersion>4.0.0</modelVersion>
 	<parent>
@@ -67,133 +67,132 @@
 						<configuration>
 							<target>
 								<unzip overwrite="true" src="target/${project.build.finalName}.jar" dest="target/jboss-pack" />
-								<delete includeemptydirs="false" failonerror="false">
-									<fileset dir="target/jboss-pack/jars">
-										<!-- Java EE / Servlet APIs - provided by container -->
-										<include name="activation-*.jar" />
-										<include name="servlet-api-*.jar" />
-										<include name="jaxb-api-*.jar" />
-										<include name="stax-api-*.jar" />
-										<include name="xml-apis-*.jar" />
-										<include name="javaee-*.jar" />
-										<include name="jboss-javaee-*.jar" />
-										<include name="jboss-ejb-api-*.jar" />
-										<include name="jboss-jacc-api-*.jar" />
-										<include name="jboss-jad-api-*.jar" />
-										<include name="jboss-jaspi-api-*.jar" />
-										<include name="jboss-jca-api-*.jar" />
-										<include name="jboss-jms-api-*.jar" />
-										<include name="jboss-transaction-api-*.jar" />
-										<include name="jta-*.jar" />
+									<delete includeemptydirs="false" failonerror="false">
+										<fileset dir="target/jboss-pack/jars">
+											<!-- Java EE / Servlet APIs - provided by container -->
+											<include name="activation-*.jar" />
+											<include name="servlet-api-*.jar" />
+											<include name="jaxb-api-*.jar" />
+											<include name="stax-api-*.jar" />
+											<include name="xml-apis-*.jar" />
+											<include name="javaee-*.jar" />
+											<include name="jboss-javaee-*.jar" />
+											<include name="jboss-ejb-api-*.jar" />
+											<include name="jboss-jacc-api-*.jar" />
+											<include name="jboss-jad-api-*.jar" />
+											<include name="jboss-jaspi-api-*.jar" />
+											<include name="jboss-jca-api-*.jar" />
+											<include name="jboss-jms-api-*.jar" />
+											<include name="jboss-transaction-api-*.jar" />
+											<include name="jta-*.jar" />
 
-										<!-- SLEE API jars - provided by container -->
-										<include name="jain-slee-1.1*.jar" />
-										<include name="jain-slee-11-ext-*.jar" />
+											<!-- SLEE API jars - provided by container module -->
+											<include name="jain-slee-1.1*.jar" />
+											<include name="jain-slee-11-ext-*.jar" />
 
-										<!-- Test jars -->
-										<include name="junit-*.jar" />
-										<include name="ant-junit-*.jar" />
-										<include name="jboss-as-j2se-*-tests.jar" />
-										<include name="jboss-test-*.jar" />
-										<include name="jboss-profiler-jvmti-*.jar" />
+											<!-- Test jars -->
+											<include name="junit-*.jar" />
+											<include name="ant-junit-*.jar" />
+											<include name="jboss-as-j2se-*-tests.jar" />
+											<include name="jboss-test-*.jar" />
+											<include name="jboss-profiler-jvmti-*.jar" />
 
-										<!-- Build tools -->
-										<include name="ant-*.jar" />
-										<include name="bcel-*.jar" />
-										<include name="qdox-*.jar" />
-										<include name="getopt-*.jar" />
-										<include name="regexp-*.jar" />
+											<!-- Build tools -->
+											<include name="ant-*.jar" />
+											<include name="bcel-*.jar" />
+											<include name="qdox-*.jar" />
+											<include name="getopt-*.jar" />
+											<include name="regexp-*.jar" />
 
-										<!-- JBoss AS 5.x server jars - not needed in DU -->
-										<include name="jboss-as-server-*.jar" />
-										<include name="jboss-as-deployment-*.jar" />
-										<include name="jboss-as-jmx-*.jar" />
-										<include name="jboss-as-mbeans-*.jar" />
-										<include name="jboss-as-security-*.jar" />
-										<include name="jboss-as-system-*.jar" />
-										<include name="jboss-as-j2se-*.jar" />
-										<include name="jboss-as-main-*.jar" />
-										<include name="jboss-as-profileservice-*.jar" />
-										<include name="jboss-as-dependency-*.jar" />
-										<include name="jboss-as-ee-*.jar" />
-										<include name="jboss-as-ejb3-*.jar" />
-										<include name="jboss-as-jpa-*.jar" />
-										<include name="jboss-as-messaging-*.jar" />
-										<include name="jboss-as-naming-*.jar" />
-										<include name="jboss-as-osgi-*.jar" />
-										<include name="jboss-as-remoting-*.jar" />
-										<include name="jboss-as-threads-*.jar" />
-										<include name="jboss-as-transactions-*.jar" />
-										<include name="jboss-as-web-*.jar" />
-										<include name="jboss-as-webservices-*.jar" />
-										<include name="jboss-as-cluster-*.jar" />
-										<include name="jboss-as-controller-*.jar" />
-										<include name="jboss-as-build-*.jar" />
-										<include name="jboss-as-tomcat-*.jar" />
+											<!-- JBoss AS 5.x server jars - not needed in DU -->
+											<include name="jboss-as-server-*.jar" />
+											<include name="jboss-as-deployment-*.jar" />
+											<include name="jboss-as-jmx-*.jar" />
+											<include name="jboss-as-mbeans-*.jar" />
+											<include name="jboss-as-security-*.jar" />
+											<include name="jboss-as-system-*.jar" />
+											<include name="jboss-as-j2se-*.jar" />
+											<include name="jboss-as-main-*.jar" />
+											<include name="jboss-as-profileservice-*.jar" />
+											<include name="jboss-as-dependency-*.jar" />
+											<include name="jboss-as-ee-*.jar" />
+											<include name="jboss-as-ejb3-*.jar" />
+											<include name="jboss-as-jpa-*.jar" />
+											<include name="jboss-as-messaging-*.jar" />
+											<include name="jboss-as-naming-*.jar" />
+											<include name="jboss-as-osgi-*.jar" />
+											<include name="jboss-as-remoting-*.jar" />
+											<include name="jboss-as-threads-*.jar" />
+											<include name="jboss-as-transactions-*.jar" />
+											<include name="jboss-as-web-*.jar" />
+											<include name="jboss-as-webservices-*.jar" />
+											<include name="jboss-as-cluster-*.jar" />
+											<include name="jboss-as-controller-*.jar" />
+											<include name="jboss-as-build-*.jar" />
+											<include name="jboss-as-tomcat-*.jar" />
 
-										<!-- JBoss kernel/bootstrap/deployers -->
-										<include name="jboss-kernel-*.jar" />
-										<include name="jboss-bootstrap-*.jar" />
-										<include name="jboss-deployers-*.jar" />
-										<include name="jboss-dependency-*.jar" />
-										<include name="jboss-vfs-*.jar" />
+											<!-- JBoss kernel/bootstrap/deployers -->
+											<include name="jboss-kernel-*.jar" />
+											<include name="jboss-bootstrap-*.jar" />
+											<include name="jboss-deployers-*.jar" />
+											<include name="jboss-dependency-*.jar" />
+											<include name="jboss-vfs-*.jar" />
 
-										<!-- JBoss classloading / reflection / metatype -->
-										<include name="jboss-classloader-*.jar" />
-										<include name="jboss-classloading-*.jar" />
-										<include name="jboss-classloading-spi-*.jar" />
-										<include name="jboss-classloading-vfs-*.jar" />
-										<include name="jboss-reflect-*.jar" />
-										<include name="jboss-metatype-*.jar" />
-										<include name="jboss-managed-*.jar" />
-										<include name="jboss-mdr-*.jar" />
-										<include name="jbossxb-*.jar" />
+											<!-- JBoss classloading / reflection / metatype -->
+											<include name="jboss-classloader-*.jar" />
+											<include name="jboss-classloading-*.jar" />
+											<include name="jboss-classloading-spi-*.jar" />
+											<include name="jboss-classloading-vfs-*.jar" />
+											<include name="jboss-reflect-*.jar" />
+											<include name="jboss-metatype-*.jar" />
+											<include name="jboss-managed-*.jar" />
+											<include name="jboss-mdr-*.jar" />
+											<include name="jbossxb-*.jar" />
 
-										<!-- JBoss cache/clustering -->
-										<include name="jbosscache-core-*.jar" />
-										<include name="jgroups-*.jar" />
-										<include name="jboss-ha-server-*.jar" />
+											<!-- JBoss cache/clustering -->
+											<include name="jbosscache-core-*.jar" />
+											<include name="jgroups-*.jar" />
+											<include name="jboss-ha-server-*.jar" />
 
-										<!-- Hibernate -->
-										<include name="hibernate-core-*.jar" />
-										<include name="hibernate-entitymanager-*.jar" />
-										<include name="hibernate-annotations-*.jar" />
-										<include name="hibernate-commons-annotations-*.jar" />
-										<include name="hibernate-validator-*.jar" />
-										<include name="ejb3-persistence-*.jar" />
-										<include name="dom4j-*.jar" />
-										<include name="javassist-*.jar" />
-										<include name="antlr-*.jar" />
-										<include name="cglib-*.jar" />
+											<!-- Hibernate core - provided by container -->
+											<include name="hibernate-core-*.jar" />
+											<include name="hibernate-entitymanager-*.jar" />
+											<include name="hibernate-annotations-*.jar" />
+											<include name="hibernate-commons-annotations-*.jar" />
+											<include name="hibernate-validator-*.jar" />
+											<include name="ejb3-persistence-*.jar" />
+											<include name="dom4j-*.jar" />
+											<include name="antlr-*.jar" />
+											<include name="cglib-*.jar" />
 
-										<!-- JBoss transactions -->
-										<include name="jbossjts-*.jar" />
-										<include name="jboss-transaction-spi-*.jar" />
+											<!-- JBoss transactions -->
+											<include name="jbossjts-*.jar" />
+											<include name="jboss-transaction-spi-*.jar" />
 
-										<!-- JBoss messaging/remoting/security -->
-										<include name="jboss-messaging-*.jar" />
-										<include name="jboss-remoting-*.jar" />
-										<include name="jboss-serialization-*.jar" />
-										<include name="jboss-security-spi-*.jar" />
-										<include name="jbosssx-*.jar" />
-										<include name="jbosssx-client-*.jar" />
-										<include name="jbossxacml-*.jar" />
-										<include name="jboss-server-manager-*.jar" />
-										<include name="jboss-profileservice-spi-*.jar" />
-										<include name="jboss-deployment-spi-*.jar" />
-										<include name="jboss-jpa-deployers-*.jar" />
-										<include name="jboss-metadata-*.jar" />
-										<include name="jboss-ws-native-*.jar" />
-										<include name="jboss-aop-*.jar" />
-										<include name="jboss-aop-mc-int-*.jar" />
-										<include name="jboss-logging-spi-*.jar" />
-										<include name="jboss-logging-log4j-*.jar" />
+											<!-- JBoss messaging/remoting/security -->
+											<include name="jboss-messaging-*.jar" />
+											<include name="jboss-remoting-*.jar" />
+											<include name="jboss-serialization-*.jar" />
+											<include name="jboss-security-spi-*.jar" />
+											<include name="jbosssx-*.jar" />
+											<include name="jbosssx-client-*.jar" />
+											<include name="jbossxacml-*.jar" />
+											<include name="jboss-server-manager-*.jar" />
+											<include name="jboss-profileservice-spi-*.jar" />
+											<include name="jboss-deployment-spi-*.jar" />
+											<include name="jboss-jpa-deployers-*.jar" />
+											<include name="jboss-metadata-*.jar" />
+											<include name="jboss-ws-native-*.jar" />
+											<include name="jboss-aop-*.jar" />
+											<include name="jboss-aop-mc-int-*.jar" />
+											<include name="jboss-logging-spi-*.jar" />
+											<include name="jboss-logging-log4j-*.jar" />
 
-										<!-- JBoss naming -->
-										<include name="jnp-client-*.jar" />
-										<include name="jnpserver-*.jar" />
-									</fileset>
-								</delete>
+											<!-- JBoss naming -->
+											<include name="jnp-client-*.jar" />
+											<include name="jnpserver-*.jar" />
+										</fileset>
+									</delete>
 								<unzip overwrite="true" src="target/jboss-pack/jars/sbbs-${project.version}.jar" dest="target/jboss-pack-sbbs" />
 								<replace file="target/jboss-pack-sbbs/META-INF/sbb-jar.xml"
 									value="&lt;resource-adaptor-type-vendor&gt;org.mobicents&lt;/resource-adaptor-type-vendor&gt;&lt;!--HTTP RESOURCE ADAPTOR type-vendor--&gt;"
