@@ -67,7 +67,7 @@
 						<configuration>
 							<target>
 								<unzip overwrite="true" src="target/${project.build.finalName}.jar" dest="target/jboss-pack" />
-								<delete includeemptydirs="false">
+								<delete includeemptydirs="false" failonerror="false">
 									<fileset dir="target/jboss-pack/jars">
 										<!-- Java EE / Servlet APIs - provided by container -->
 										<include name="activation-*.jar" />

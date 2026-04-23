@@ -4,24 +4,24 @@
     <resources>
 
 		<!-- SLEE CONTAINER MODULES - PLS KEEP A-Z ORDER -->
-        <resource-root path="activities-7.0.0-SNAPSHOT.jar"/>
-        <resource-root path="common-7.0.0-SNAPSHOT.jar"/>
-        <resource-root path="components-7.0.0-SNAPSHOT.jar"/>
-        <resource-root path="congestion-7.0.0-SNAPSHOT.jar"/>
-        <resource-root path="descriptors-7.0.0-SNAPSHOT.jar"/>
-        <resource-root path="events-7.0.0-SNAPSHOT.jar"/>
-        <resource-root path="fault-tolerant-ra-api-7.0.0-SNAPSHOT.jar"/>
-        <resource-root path="fault-tolerant-ra-impl-7.0.0-SNAPSHOT.jar"/>
-        <resource-root path="jmx-property-editors-7.0.0-SNAPSHOT.jar"/>
-        <resource-root path="profiles-7.0.0-SNAPSHOT.jar"/>
-        <resource-root path="remote-7.0.0-SNAPSHOT.jar"/>
-        <resource-root path="resource-7.0.0-SNAPSHOT.jar"/>
-        <resource-root path="router-7.0.0-SNAPSHOT.jar"/>
-        <resource-root path="services-7.0.0-SNAPSHOT.jar"/>
-        <resource-root path="slee-timers-7.0.0-SNAPSHOT.jar"/>
-        <resource-root path="spi-7.0.0-SNAPSHOT.jar"/>
-        <resource-root path="transaction-7.0.0-SNAPSHOT.jar"/>
-        <resource-root path="usage-7.0.0-SNAPSHOT.jar"/>
+        <resource-root path="activities-8.0.0-SNAPSHOT.jar"/>
+        <resource-root path="common-8.0.0-SNAPSHOT.jar"/>
+        <resource-root path="components-8.0.0-SNAPSHOT.jar"/>
+        <resource-root path="congestion-8.0.0-SNAPSHOT.jar"/>
+        <resource-root path="descriptors-8.0.0-SNAPSHOT.jar"/>
+        <resource-root path="events-8.0.0-SNAPSHOT.jar"/>
+        <resource-root path="fault-tolerant-ra-api-8.0.0-SNAPSHOT.jar"/>
+        <resource-root path="fault-tolerant-ra-impl-8.0.0-SNAPSHOT.jar"/>
+        <resource-root path="jmx-property-editors-8.0.0-SNAPSHOT.jar"/>
+        <resource-root path="profiles-8.0.0-SNAPSHOT.jar"/>
+        <resource-root path="remote-8.0.0-SNAPSHOT.jar"/>
+        <resource-root path="resource-8.0.0-SNAPSHOT.jar"/>
+        <resource-root path="router-8.0.0-SNAPSHOT.jar"/>
+        <resource-root path="services-8.0.0-SNAPSHOT.jar"/>
+        <resource-root path="slee-timers-8.0.0-SNAPSHOT.jar"/>
+        <resource-root path="spi-8.0.0-SNAPSHOT.jar"/>
+        <resource-root path="transaction-8.0.0-SNAPSHOT.jar"/>
+        <resource-root path="usage-8.0.0-SNAPSHOT.jar"/>
 
 		<!-- SLEE CONTAINER DEPS - PLS KEEP VERSION PROPERTY A-Z ORDER -->
 		<!-- each entry path is ${dep.artifactId}-${dep.version.prop.name}.jar -->
