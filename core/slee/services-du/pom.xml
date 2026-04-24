@@ -194,9 +194,7 @@
 										</fileset>
 									</delete>
 								<unzip overwrite="true" src="target/jboss-pack/jars/sbbs-${project.version}.jar" dest="target/jboss-pack-sbbs" />
-								<replace file="target/jboss-pack-sbbs/META-INF/sbb-jar.xml"
-									value="&lt;resource-adaptor-type-vendor&gt;org.mobicents&lt;/resource-adaptor-type-vendor&gt;&lt;!--HTTP RESOURCE ADAPTOR type-vendor--&gt;"
-									token="&lt;resource-adaptor-type-vendor&gt;org.restcomm&lt;/resource-adaptor-type-vendor&gt;&lt;!--HTTP RESOURCE ADAPTOR type-vendor--&gt;" />
+								<!-- Removed obsolete vendor flip: HTTP Resource Adaptor Type is now org.restcomm -->
 								<zip basedir="target/jboss-pack-sbbs" destfile="target/jboss-pack/jars/sbbs-${project.version}.jar" />
 								<zip basedir="target/jboss-pack" destfile="target/services-DU-jboss-${project.version}.jar" />
 								<zip basedir="target/jboss-pack" destfile="target/${project.build.finalName}.jar" />

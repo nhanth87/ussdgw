@@ -1,3 +1,9 @@
 <dependency xmlns="urn:jboss:dependency:1.0">
+	<item whenRequired="Real" dependentState="Installed">org.restcomm.ss7:service=MAPSS7Service</item>
 	<item whenRequired="Real" dependentState="Installed">UssdManagement</item>
+	<item whenRequired="Real" dependentState="Installed">restcomm-slee-ra-map-du-9.2.9.jar</item>
+	<item whenRequired="Real" dependentState="Installed">restcomm-slee-ra-jdbc-DU-7.0.0-SNAPSHOT.jar</item>
+	<item whenRequired="Real" dependentState="Installed">http-client-ra-DU-7.0.0-SNAPSHOT.jar</item>
+	<item whenRequired="Real" dependentState="Installed">http-servlet-ra-DU-7.0.0-SNAPSHOT.jar</item>
+	<item whenRequired="Real" dependentState="Installed">sip11-ra-DU-7.0.0-SNAPSHOT.jar</item>
 </dependency>

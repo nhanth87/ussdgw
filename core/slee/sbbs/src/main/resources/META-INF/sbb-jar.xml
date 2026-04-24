@@ -55,7 +55,7 @@
 			<event-name>DialogRequest</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.DIALOG_REQUEST</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 			<initial-event-select variable="ActivityContext" />
@@ -65,7 +65,7 @@
 			<event-name>DialogTimeout</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.DIALOG_TIMEOUT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -76,7 +76,7 @@
 				<event-type-name>
 					ss7.map.service.suplementary.PROCESS_UNSTRUCTURED_SS_REQUEST
 				</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 			<initial-event-select variable="ActivityContext" />
@@ -85,7 +85,7 @@
 		<resource-adaptor-type-binding>
 			<resource-adaptor-type-ref>
 				<resource-adaptor-type-name>MAPResourceAdaptorType</resource-adaptor-type-name>
-				<resource-adaptor-type-vendor>org.mobicents</resource-adaptor-type-vendor>
+				<resource-adaptor-type-vendor>org.restcomm</resource-adaptor-type-vendor>
 				<resource-adaptor-type-version>2.0</resource-adaptor-type-version>
 			</resource-adaptor-type-ref>
 			<activity-context-interface-factory-name>slee/resources/map/2.0/acifactory</activity-context-interface-factory-name>
@@ -177,7 +177,7 @@
 				<event-type-name>
 					ss7.map.service.suplementary.PROCESS_UNSTRUCTURED_SS_REQUEST
 				</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -188,7 +188,7 @@
 				<event-type-name>
 					ss7.map.service.suplementary.UNSTRUCTURED_SS_RESPONSE
 				</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -198,7 +198,7 @@
 			<event-name>DialogDelimiter</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.DIALOG_DELIMITER</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -207,7 +207,7 @@
 			<event-name>DialogAccept</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.DIALOG_ACCEPT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -216,7 +216,7 @@
 			<event-name>DialogReject</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.DIALOG_REJECT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -225,7 +225,7 @@
 			<event-name>DialogUserAbort</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.DIALOG_USERABORT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -234,7 +234,7 @@
 			<event-name>DialogProviderAbort</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.DIALOG_PROVIDERABORT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -243,7 +243,7 @@
 			<event-name>DialogClose</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.DIALOG_CLOSE</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -252,7 +252,7 @@
 			<event-name>DialogNotice</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.DIALOG_NOTICE</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -261,7 +261,7 @@
 			<event-name>DialogTimeout</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.DIALOG_TIMEOUT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -271,7 +271,7 @@
 			<event-name>InvokeTimeout</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.INVOKE_TIMEOUT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -280,7 +280,7 @@
 			<event-name>ErrorComponent</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.ERROR_COMPONENT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -289,7 +289,7 @@
 			<event-name>RejectComponent</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.REJECT_COMPONENT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -298,7 +298,7 @@
             <event-name>DialogRelease</event-name>
             <event-type-ref>
                 <event-type-name>ss7.map.DIALOG_RELEASE</event-type-name>
-                <event-type-vendor>org.mobicents</event-type-vendor>
+                <event-type-vendor>org.restcomm</event-type-vendor>
                 <event-type-version>1.0</event-type-version>
             </event-type-ref>
         </event>
@@ -328,7 +328,7 @@
 		<resource-adaptor-type-binding>
 			<resource-adaptor-type-ref>
 				<resource-adaptor-type-name>MAPResourceAdaptorType</resource-adaptor-type-name>
-				<resource-adaptor-type-vendor>org.mobicents</resource-adaptor-type-vendor>
+				<resource-adaptor-type-vendor>org.restcomm</resource-adaptor-type-vendor>
 				<resource-adaptor-type-version>2.0</resource-adaptor-type-version>
 			</resource-adaptor-type-ref>
 			<activity-context-interface-factory-name>slee/resources/map/2.0/acifactory</activity-context-interface-factory-name>
@@ -425,7 +425,7 @@
 				<event-type-name>
 					ss7.map.service.suplementary.PROCESS_UNSTRUCTURED_SS_REQUEST
 				</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -436,7 +436,7 @@
 				<event-type-name>
 					ss7.map.service.suplementary.UNSTRUCTURED_SS_RESPONSE
 				</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -446,7 +446,7 @@
 			<event-name>DialogDelimiter</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.DIALOG_DELIMITER</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -455,7 +455,7 @@
 			<event-name>DialogAccept</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.DIALOG_ACCEPT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -464,7 +464,7 @@
 			<event-name>DialogReject</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.DIALOG_REJECT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -473,7 +473,7 @@
 			<event-name>DialogUserAbort</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.DIALOG_USERABORT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -482,7 +482,7 @@
 			<event-name>DialogProviderAbort</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.DIALOG_PROVIDERABORT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -491,7 +491,7 @@
 			<event-name>DialogClose</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.DIALOG_CLOSE</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -500,7 +500,7 @@
 			<event-name>DialogNotice</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.DIALOG_NOTICE</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -509,7 +509,7 @@
 			<event-name>DialogTimeout</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.DIALOG_TIMEOUT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -518,7 +518,7 @@
             <event-name>DialogRelease</event-name>
             <event-type-ref>
                 <event-type-name>ss7.map.DIALOG_RELEASE</event-type-name>
-                <event-type-vendor>org.mobicents</event-type-vendor>
+                <event-type-vendor>org.restcomm</event-type-vendor>
                 <event-type-version>1.0</event-type-version>
             </event-type-ref>
         </event>
@@ -528,7 +528,7 @@
 			<event-name>InvokeTimeout</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.INVOKE_TIMEOUT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -537,7 +537,7 @@
 			<event-name>ErrorComponent</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.ERROR_COMPONENT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -546,7 +546,7 @@
 			<event-name>RejectComponent</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.REJECT_COMPONENT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -652,7 +652,7 @@
 		<resource-adaptor-type-binding>
 			<resource-adaptor-type-ref>
 				<resource-adaptor-type-name>MAPResourceAdaptorType</resource-adaptor-type-name>
-				<resource-adaptor-type-vendor>org.mobicents</resource-adaptor-type-vendor>
+				<resource-adaptor-type-vendor>org.restcomm</resource-adaptor-type-vendor>
 				<resource-adaptor-type-version>2.0</resource-adaptor-type-version>
 			</resource-adaptor-type-ref>
 			<activity-context-interface-factory-name>slee/resources/map/2.0/acifactory</activity-context-interface-factory-name>
@@ -1012,7 +1012,7 @@
 			<event-name>ProcessUnstructuredSSResponse</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.service.suplementary.PROCESS_UNSTRUCTURED_SS_RESPONSE</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1020,7 +1020,7 @@
 			<event-name>UnstructuredSSRequest</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.service.suplementary.UNSTRUCTURED_SS_REQUEST</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1028,7 +1028,7 @@
 			<event-name>UnstructuredSSResponse</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.service.suplementary.UNSTRUCTURED_SS_RESPONSE</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1036,7 +1036,7 @@
 			<event-name>UnstructuredSSNotifyRequest</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.service.suplementary.UNSTRUCTURED_SS_NOTIFY_REQUEST</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1044,7 +1044,7 @@
 			<event-name>UnstructuredSSNotifyResponse</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.service.suplementary.UNSTRUCTURED_SS_NOTIFY_RESPONSE</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1054,7 +1054,7 @@
 			<event-name>InvokeTimeout</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.INVOKE_TIMEOUT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1062,7 +1062,7 @@
 			<event-name>RejectComponent</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.REJECT_COMPONENT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1070,7 +1070,7 @@
 			<event-name>ErrorComponent</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.ERROR_COMPONENT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1078,7 +1078,7 @@
 			<event-name>DialogAccept</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.DIALOG_ACCEPT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1086,7 +1086,7 @@
 			<event-name>DialogReject</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.DIALOG_REJECT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1094,7 +1094,7 @@
 			<event-name>DialogUserAbort</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.DIALOG_USERABORT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1102,7 +1102,7 @@
 			<event-name>DialogProviderAbort</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.DIALOG_PROVIDERABORT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1110,7 +1110,7 @@
 			<event-name>DialogTimeout</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.DIALOG_TIMEOUT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1118,7 +1118,7 @@
             <event-name>DialogRelease</event-name>
             <event-type-ref>
                 <event-type-name>ss7.map.DIALOG_RELEASE</event-type-name>
-                <event-type-vendor>org.mobicents</event-type-vendor>
+                <event-type-vendor>org.restcomm</event-type-vendor>
                 <event-type-version>1.0</event-type-version>
             </event-type-ref>
         </event>
@@ -1126,7 +1126,7 @@
 		<resource-adaptor-type-binding>
 			<resource-adaptor-type-ref>
 				<resource-adaptor-type-name>MAPResourceAdaptorType</resource-adaptor-type-name>
-				<resource-adaptor-type-vendor>org.mobicents</resource-adaptor-type-vendor>
+				<resource-adaptor-type-vendor>org.restcomm</resource-adaptor-type-vendor>
 				<resource-adaptor-type-version>2.0</resource-adaptor-type-version>
 			</resource-adaptor-type-ref>
 			<activity-context-interface-factory-name>slee/resources/map/2.0/acifactory</activity-context-interface-factory-name>
@@ -1246,7 +1246,7 @@
 			<event-name>ProcessUnstructuredSSResponse</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.service.suplementary.PROCESS_UNSTRUCTURED_SS_RESPONSE</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1254,7 +1254,7 @@
 			<event-name>UnstructuredSSRequest</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.service.suplementary.UNSTRUCTURED_SS_REQUEST</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1262,7 +1262,7 @@
 			<event-name>UnstructuredSSResponse</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.service.suplementary.UNSTRUCTURED_SS_RESPONSE</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1270,7 +1270,7 @@
 			<event-name>UnstructuredSSNotifyRequest</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.service.suplementary.UNSTRUCTURED_SS_NOTIFY_REQUEST</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1278,7 +1278,7 @@
 			<event-name>UnstructuredSSNotifyResponse</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.service.suplementary.UNSTRUCTURED_SS_NOTIFY_RESPONSE</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1288,7 +1288,7 @@
 			<event-name>InvokeTimeout</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.INVOKE_TIMEOUT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1296,7 +1296,7 @@
 			<event-name>RejectComponent</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.REJECT_COMPONENT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1304,7 +1304,7 @@
 			<event-name>ErrorComponent</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.ERROR_COMPONENT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1312,7 +1312,7 @@
 			<event-name>DialogAccept</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.DIALOG_ACCEPT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1320,7 +1320,7 @@
 			<event-name>DialogReject</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.DIALOG_REJECT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1328,7 +1328,7 @@
 			<event-name>DialogUserAbort</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.DIALOG_USERABORT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1336,7 +1336,7 @@
 			<event-name>DialogProviderAbort</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.DIALOG_PROVIDERABORT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1344,7 +1344,7 @@
 			<event-name>DialogTimeout</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.DIALOG_TIMEOUT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1442,7 +1442,7 @@
             <event-name>DialogRelease</event-name>
             <event-type-ref>
                 <event-type-name>ss7.map.DIALOG_RELEASE</event-type-name>
-                <event-type-vendor>org.mobicents</event-type-vendor>
+                <event-type-vendor>org.restcomm</event-type-vendor>
                 <event-type-version>1.0</event-type-version>
             </event-type-ref>
         </event>
@@ -1451,7 +1451,7 @@
 		<resource-adaptor-type-binding>
 			<resource-adaptor-type-ref>
 				<resource-adaptor-type-name>MAPResourceAdaptorType</resource-adaptor-type-name>
-				<resource-adaptor-type-vendor>org.mobicents</resource-adaptor-type-vendor>
+				<resource-adaptor-type-vendor>org.restcomm</resource-adaptor-type-vendor>
 				<resource-adaptor-type-version>2.0</resource-adaptor-type-version>
 			</resource-adaptor-type-ref>
 			<activity-context-interface-factory-name>slee/resources/map/2.0/acifactory</activity-context-interface-factory-name>
@@ -1528,7 +1528,7 @@
 			<event-name>SendRoutingInfoForSMResponse</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.service.sms.SEND_ROUTING_INFO_FOR_SM_RESPONSE</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1536,7 +1536,7 @@
 			<event-name>InvokeTimeout</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.INVOKE_TIMEOUT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1544,7 +1544,7 @@
 			<event-name>RejectComponent</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.REJECT_COMPONENT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1552,7 +1552,7 @@
 			<event-name>ErrorComponent</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.ERROR_COMPONENT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1560,7 +1560,7 @@
 			<event-name>DialogReject</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.DIALOG_REJECT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1568,7 +1568,7 @@
 			<event-name>DialogUserAbort</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.DIALOG_USERABORT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1576,7 +1576,7 @@
 			<event-name>DialogProviderAbort</event-name>
 			<event-type-ref>
 				<event-type-name>ss7.map.DIALOG_PROVIDERABORT</event-type-name>
-				<event-type-vendor>org.mobicents</event-type-vendor>
+				<event-type-vendor>org.restcomm</event-type-vendor>
 				<event-type-version>1.0</event-type-version>
 			</event-type-ref>
 		</event>
@@ -1584,7 +1584,7 @@
             <event-name>DialogTimeout</event-name>
             <event-type-ref>
                 <event-type-name>ss7.map.DIALOG_TIMEOUT</event-type-name>
-                <event-type-vendor>org.mobicents</event-type-vendor>
+                <event-type-vendor>org.restcomm</event-type-vendor>
                 <event-type-version>1.0</event-type-version>
             </event-type-ref>
         </event>
@@ -1592,7 +1592,7 @@
             <event-name>DialogClose</event-name>
             <event-type-ref>
                 <event-type-name>ss7.map.DIALOG_CLOSE</event-type-name>
-                <event-type-vendor>org.mobicents</event-type-vendor>
+                <event-type-vendor>org.restcomm</event-type-vendor>
                 <event-type-version>1.0</event-type-version>
             </event-type-ref>
         </event>
@@ -1600,7 +1600,7 @@
             <event-name>DialogDelimiter</event-name>
             <event-type-ref>
                 <event-type-name>ss7.map.DIALOG_DELIMITER</event-type-name>
-                <event-type-vendor>org.mobicents</event-type-vendor>
+                <event-type-vendor>org.restcomm</event-type-vendor>
                 <event-type-version>1.0</event-type-version>
             </event-type-ref>
         </event>
@@ -1608,7 +1608,7 @@
 		<resource-adaptor-type-binding>
 			<resource-adaptor-type-ref>
 				<resource-adaptor-type-name>MAPResourceAdaptorType</resource-adaptor-type-name>
-				<resource-adaptor-type-vendor>org.mobicents</resource-adaptor-type-vendor>
+				<resource-adaptor-type-vendor>org.restcomm</resource-adaptor-type-vendor>
 				<resource-adaptor-type-version>2.0</resource-adaptor-type-version>
 			</resource-adaptor-type-ref>
 			<activity-context-interface-factory-name>slee/resources/map/2.0/acifactory</activity-context-interface-factory-name>
