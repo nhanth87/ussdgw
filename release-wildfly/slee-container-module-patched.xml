@@ -65,5 +65,6 @@
         <module name="org.infinispan" export="true"/>
         <module name="org.infinispan.commons" optional="true" export="true"/>
         <module name="org.mobicents.ussd.bootstrap" export="true"/>
+        <module name="org.restcomm.slee.resource.http.common" export="true"/>
     </dependencies>
 </module>
