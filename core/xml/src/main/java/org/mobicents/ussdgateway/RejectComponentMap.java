@@ -23,7 +23,6 @@ package org.mobicents.ussdgateway;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonProperty;
 
 import org.restcomm.protocols.ss7.tcap.asn.comp.Problem;
 
@@ -37,26 +36,19 @@ import java.util.Collections;
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class RejectComponentMap {
-
-    @JsonProperty("rejectComponents")
-    private HashMap<Long, Problem> data = new HashMap<>();
+public class RejectComponentMap extends HashMap<String, Problem> {
 
     public void put(Long invokeId, Problem problem) {
-        this.data.put(invokeId, problem);
-    }
-
-    public void clear() {
-        this.data.clear();
-    }
-
-    public int size() {
-        return this.data.size();
+        this.put("id" + invokeId, problem);
     }
 
     @JsonIgnore
     public Map<Long, Problem> getRejectComponents() {
-        return Collections.unmodifiableMap(data);
+        Map<Long, Problem> result = new HashMap<>();
+        for (Map.Entry<String, Problem> entry : entrySet()) {
+            result.put(Long.valueOf(entry.getKey().substring(2)), entry.getValue());
+        }
+        return Collections.unmodifiableMap(result);
     }
 
     @Override
@@ -65,8 +57,8 @@ public class RejectComponentMap {
         sb.append("RejectComponentMap=[");
 
         int i1 = 0;
-        for (Map.Entry<Long, Problem> entry : data.entrySet()) {
-            Long id = entry.getKey();
+        for (Map.Entry<String, Problem> entry : entrySet()) {
+            Long id = Long.valueOf(entry.getKey().substring(2));
             Problem problem = entry.getValue();
 
             if (i1 == 0)

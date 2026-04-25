@@ -142,8 +142,12 @@ public class TestServlet extends HttpServlet {
 			MessageType messageType = original.getTCAPMessageType();
 
 			// This is initial request, if its not NTFY, we need session
-			for (FastList.Node<MAPMessage> n = capMessages.head(), end = capMessages.tail(); (n = n.getNext()) != end;) {
-				final MAPMessage rawMessage = n.getValue();
+			for (int i = 0; i < capMessages.size(); i++) {
+				final MAPMessage rawMessage = capMessages.get(i);
+				if (rawMessage == null) {
+					logger.warn("TestServlet: NULL message at index " + i);
+					continue;
+				}
 				final MAPMessageType type = rawMessage.getMessageType();
 
 				switch (messageType) {

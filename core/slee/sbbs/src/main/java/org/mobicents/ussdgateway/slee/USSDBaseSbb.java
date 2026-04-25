@@ -78,7 +78,7 @@ public class USSDBaseSbb implements Sbb {
 	// MAP RA STUFF
 	// -------------------------------------------------------------
 	protected static final ResourceAdaptorTypeID mapRATypeID = new ResourceAdaptorTypeID("MAPResourceAdaptorType",
-			"org.mobicents", "2.0");
+			"org.restcomm", "2.0");
 	protected static final String mapRaLink = "MAPRA";
 	protected MAPContextInterfaceFactory mapAcif;
 	protected MAPProvider mapProvider;
@@ -205,8 +205,15 @@ public class USSDBaseSbb implements Sbb {
 			throws MAPException {
         FastList<MAPMessage> mapMessages = xmlMAPDialog.getMAPMessages();
         if (mapMessages != null) {
-            for (FastList.Node<MAPMessage> n = mapMessages.head(), end = mapMessages.tail(); (n = n.getNext()) != end;) {
-                Long invokeId = this.processMAPMessageFromApplication(n.getValue(), mapDialog, xmlMAPDialog.getCustomInvokeTimeOut());
+            for (int i = 0; i < mapMessages.size(); i++) {
+                MAPMessage msg = mapMessages.get(i);
+                if (msg == null) {
+                    if (logger.isWarningEnabled()) {
+                        logger.warning("processXmlMAPDialog: NULL message at index " + i);
+                    }
+                    continue;
+                }
+                Long invokeId = this.processMAPMessageFromApplication(msg, mapDialog, xmlMAPDialog.getCustomInvokeTimeOut());
             }
         }
 	}

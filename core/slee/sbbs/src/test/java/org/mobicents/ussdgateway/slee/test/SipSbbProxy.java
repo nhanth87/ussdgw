@@ -168,6 +168,17 @@ public class SipSbbProxy extends SipClientSbb {
     }
 
     @Override
+    public void setHttpSessionId(String httpSessionId) {
+        // TODO Auto-generated method stub
+    }
+
+    @Override
+    public String getHttpSessionId() {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    @Override
     public ChildRelationExt getCDRPlainInterfaceChildRelation() {
         // TODO Auto-generated method stub
         return null;

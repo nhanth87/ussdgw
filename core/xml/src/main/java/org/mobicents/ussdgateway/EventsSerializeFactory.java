@@ -21,17 +21,29 @@
 package org.mobicents.ussdgateway;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonDeserializer;
+import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.SerializerProvider;
+import com.fasterxml.jackson.databind.jsontype.NamedType;
+import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 
+import org.restcomm.protocols.ss7.map.api.MAPApplicationContext;
+import org.restcomm.protocols.ss7.map.api.MAPApplicationContextName;
+import org.restcomm.protocols.ss7.map.api.MAPApplicationContextVersion;
+import org.restcomm.protocols.ss7.map.api.dialog.MAPUserAbortChoice;
 import org.restcomm.protocols.ss7.map.errors.MAPErrorMessageAbsentSubscriberImpl;
 import org.restcomm.protocols.ss7.map.errors.MAPErrorMessageAbsentSubscriberSMImpl;
 import org.restcomm.protocols.ss7.map.errors.MAPErrorMessageBusySubscriberImpl;
@@ -50,10 +62,12 @@ import org.restcomm.protocols.ss7.map.errors.MAPErrorMessageSubscriberBusyForMtS
 import org.restcomm.protocols.ss7.map.errors.MAPErrorMessageSystemFailureImpl;
 import org.restcomm.protocols.ss7.map.errors.MAPErrorMessageUnauthorizedLCSClientImpl;
 import org.restcomm.protocols.ss7.map.errors.MAPErrorMessageUnknownSubscriberImpl;
+import org.restcomm.protocols.ss7.sccp.impl.parameter.DefaultEncodingScheme;
 import org.restcomm.protocols.ss7.sccp.impl.parameter.GlobalTitle0001Impl;
 import org.restcomm.protocols.ss7.sccp.impl.parameter.GlobalTitle0010Impl;
 import org.restcomm.protocols.ss7.sccp.impl.parameter.GlobalTitle0011Impl;
 import org.restcomm.protocols.ss7.sccp.impl.parameter.GlobalTitle0100Impl;
+import org.restcomm.protocols.ss7.tcap.asn.ProblemImpl;
 
 /**
  * Factory Object used to serialize/de-serialize the {@link XmlMAPDialog} objects
@@ -100,6 +114,103 @@ public class EventsSerializeFactory {
         // this.xmlMapper.configure(SerializationFeature.INDENT_OUTPUT, true);
         this.xmlMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         this.xmlMapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
+        
+        // Register mixins for jSS7 classes that lack complete Jackson annotations
+        this.xmlMapper.addMixIn(org.restcomm.protocols.ss7.sccp.parameter.SccpAddress.class, SccpAddressMixin.class);
+        this.xmlMapper.addMixIn(org.restcomm.protocols.ss7.sccp.impl.parameter.SccpAddressImpl.class, SccpAddressImplMixin.class);
+        this.xmlMapper.addMixIn(org.restcomm.protocols.ss7.map.api.errors.MAPErrorMessage.class, MAPErrorMessageMixin.class);
+        this.xmlMapper.addMixIn(org.restcomm.protocols.ss7.tcap.asn.comp.Problem.class, ProblemMixin.class);
+        
+        // Register custom serializers/deserializers
+        SimpleModule module = new SimpleModule();
+        module.addSerializer(MAPApplicationContext.class, new JsonSerializer<MAPApplicationContext>() {
+            @Override
+            public void serialize(MAPApplicationContext value, JsonGenerator gen, SerializerProvider serializers) throws IOException {
+                gen.writeString(value.getApplicationContextName().name() + "_" + value.getApplicationContextVersion().name());
+            }
+        });
+        module.addDeserializer(MAPApplicationContext.class, new JsonDeserializer<MAPApplicationContext>() {
+            @Override
+            public MAPApplicationContext deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
+                String str = p.getValueAsString();
+                // Performance: use indexOf/substring instead of split (avoids regex overhead)
+                int underscore = str.indexOf('_');
+                MAPApplicationContextName name;
+                MAPApplicationContextVersion version;
+                if (underscore >= 0) {
+                    name = MAPApplicationContextName.valueOf(str.substring(0, underscore));
+                    version = MAPApplicationContextVersion.valueOf(str.substring(underscore + 1));
+                } else {
+                    // Backward compatibility: XML without version suffix (e.g. "networkUnstructuredSsContext")
+                    name = MAPApplicationContextName.valueOf(str);
+                    version = null;
+                    for (int i = 1; i <= 4; i++) {
+                        if (MAPApplicationContext.availableApplicationContextVersion(name, i)) {
+                            version = MAPApplicationContextVersion.getInstance(i);
+                            break;
+                        }
+                    }
+                    if (version == null) {
+                        throw new IOException("No available version for MAPApplicationContextName: " + name);
+                    }
+                }
+                return MAPApplicationContext.getInstance(name, version);
+            }
+        });
+        module.addSerializer(MAPUserAbortChoice.class, new JsonSerializer<MAPUserAbortChoice>() {
+            @Override
+            public void serialize(MAPUserAbortChoice value, JsonGenerator gen, SerializerProvider serializers) throws IOException {
+                gen.writeString(XmlMAPDialog.serializeMAPUserAbortChoice(value));
+            }
+        });
+        module.addDeserializer(MAPUserAbortChoice.class, new JsonDeserializer<MAPUserAbortChoice>() {
+            @Override
+            public MAPUserAbortChoice deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
+                String str = p.getValueAsString();
+                return XmlMAPDialog.deserializeMAPUserAbortChoice(str);
+            }
+        });
+        this.xmlMapper.registerModule(module);
+        
+        // Register subtypes for polymorphic deserialization
+        this.xmlMapper.registerSubtypes(
+            new NamedType(org.restcomm.protocols.ss7.map.service.supplementary.ProcessUnstructuredSSRequestImpl.class, "processUnstructuredSSRequest_Request"),
+            new NamedType(org.restcomm.protocols.ss7.map.service.supplementary.ProcessUnstructuredSSResponseImpl.class, "processUnstructuredSSRequest_Response"),
+            new NamedType(org.restcomm.protocols.ss7.map.service.supplementary.UnstructuredSSRequestImpl.class, "unstructuredSSRequest_Request"),
+            new NamedType(org.restcomm.protocols.ss7.map.service.supplementary.UnstructuredSSResponseImpl.class, "unstructuredSSRequest_Response"),
+            new NamedType(org.restcomm.protocols.ss7.map.service.supplementary.UnstructuredSSNotifyRequestImpl.class, "unstructuredSSNotify_Request"),
+            new NamedType(org.restcomm.protocols.ss7.map.service.supplementary.UnstructuredSSNotifyResponseImpl.class, "unstructuredSSNotify_Response"),
+            new NamedType(org.restcomm.protocols.ss7.map.primitives.AddressStringImpl.class, "AddressString"),
+            new NamedType(org.restcomm.protocols.ss7.map.primitives.ISDNAddressStringImpl.class, "ISDNAddressString"),
+            new NamedType(org.restcomm.protocols.ss7.map.primitives.USSDStringImpl.class, "USSDString"),
+            new NamedType(org.restcomm.protocols.ss7.map.datacoding.CBSDataCodingSchemeImpl.class, "CBSDataCodingScheme"),
+            new NamedType(org.restcomm.protocols.ss7.map.primitives.AlertingPatternImpl.class, "AlertingPattern"),
+            new NamedType(org.restcomm.protocols.ss7.sccp.impl.parameter.SccpAddressImpl.class, "SccpAddress"),
+            new NamedType(org.restcomm.protocols.ss7.sccp.impl.parameter.GlobalTitle0001Impl.class, "GlobalTitle0001"),
+            new NamedType(org.restcomm.protocols.ss7.sccp.impl.parameter.GlobalTitle0010Impl.class, "GlobalTitle0010"),
+            new NamedType(org.restcomm.protocols.ss7.sccp.impl.parameter.GlobalTitle0011Impl.class, "GlobalTitle0011"),
+            new NamedType(org.restcomm.protocols.ss7.sccp.impl.parameter.GlobalTitle0100Impl.class, "GlobalTitle0100"),
+            new NamedType(MAPErrorMessageExtensionContainerImpl.class, "MAPErrorMessageExtensionContainer"),
+            new NamedType(MAPErrorMessageSMDeliveryFailureImpl.class, "MAPErrorMessageSMDeliveryFailure"),
+            new NamedType(MAPErrorMessageAbsentSubscriberSMImpl.class, "MAPErrorMessageAbsentSubscriberSM"),
+            new NamedType(MAPErrorMessageSystemFailureImpl.class, "MAPErrorMessageSystemFailure"),
+            new NamedType(MAPErrorMessageCallBarredImpl.class, "MAPErrorMessageCallBarred"),
+            new NamedType(MAPErrorMessageFacilityNotSupImpl.class, "MAPErrorMessageFacilityNotSup"),
+            new NamedType(MAPErrorMessageUnknownSubscriberImpl.class, "MAPErrorMessageUnknownSubscriber"),
+            new NamedType(MAPErrorMessageSubscriberBusyForMtSmsImpl.class, "MAPErrorMessageSubscriberBusyForMtSms"),
+            new NamedType(MAPErrorMessageAbsentSubscriberImpl.class, "MAPErrorMessageAbsentSubscriber"),
+            new NamedType(MAPErrorMessageUnauthorizedLCSClientImpl.class, "MAPErrorMessageUnauthorizedLCSClient"),
+            new NamedType(MAPErrorMessagePositionMethodFailureImpl.class, "MAPErrorMessagePositionMethodFailure"),
+            new NamedType(MAPErrorMessageBusySubscriberImpl.class, "MAPErrorMessageBusySubscriber"),
+            new NamedType(MAPErrorMessageCUGRejectImpl.class, "MAPErrorMessageCUGReject"),
+            new NamedType(MAPErrorMessageRoamingNotAllowedImpl.class, "MAPErrorMessageRoamingNotAllowed"),
+            new NamedType(MAPErrorMessageSsErrorStatusImpl.class, "MAPErrorMessageSsErrorStatus"),
+            new NamedType(MAPErrorMessageSsIncompatibilityImpl.class, "MAPErrorMessageSsIncompatibility"),
+            new NamedType(MAPErrorMessagePwRegistrationFailureImpl.class, "MAPErrorMessagePwRegistrationFailure"),
+            new NamedType(MAPErrorMessageParameterlessImpl.class, "MAPErrorMessageParameterless"),
+            new NamedType(ProblemImpl.class, "Problem"),
+            new NamedType(DefaultEncodingScheme.class, "DefaultEncodingScheme")
+        );
         
         // Register aliases - same as original javolution XMLBinding
         registerAliases();

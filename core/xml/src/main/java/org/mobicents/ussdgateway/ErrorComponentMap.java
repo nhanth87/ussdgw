@@ -23,7 +23,6 @@ package org.mobicents.ussdgateway;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonProperty;
 
 import org.restcomm.protocols.ss7.map.api.errors.MAPErrorMessage;
 import org.restcomm.protocols.ss7.map.api.errors.MAPErrorMessageAbsentSubscriber;
@@ -56,7 +55,7 @@ import java.util.Collections;
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class ErrorComponentMap {
+public class ErrorComponentMap extends HashMap<String, MAPErrorMessage> {
 
     public static final String MAP_ERROR_EXT_CONTAINER = MAPErrorMessageExtensionContainer.class.getSimpleName();
     public static final String MAP_ERROR_SM_DEL_FAILURE = MAPErrorMessageSMDeliveryFailure.class.getSimpleName();
@@ -77,24 +76,17 @@ public class ErrorComponentMap {
     public static final String MAP_ERROR_PW_REGS_FAIL = MAPErrorMessagePwRegistrationFailure.class.getSimpleName();
     public static final String MAP_ERROR_PARAM_LESS = MAPErrorMessageParameterless.class.getSimpleName();
 
-    @JsonProperty("errorComponents")
-    private HashMap<Long, MAPErrorMessage> data = new HashMap<>();
-
     public void put(Long invokeId, MAPErrorMessage mapErrorMessage) {
-        this.data.put(invokeId, mapErrorMessage);
-    }
-
-    public void clear() {
-        this.data.clear();
-    }
-
-    public int size() {
-        return this.data.size();
+        this.put("id" + invokeId, mapErrorMessage);
     }
 
     @JsonIgnore
     public Map<Long, MAPErrorMessage> getErrorComponents() {
-        return Collections.unmodifiableMap(data);
+        Map<Long, MAPErrorMessage> result = new HashMap<>();
+        for (Map.Entry<String, MAPErrorMessage> entry : entrySet()) {
+            result.put(Long.valueOf(entry.getKey().substring(2)), entry.getValue());
+        }
+        return Collections.unmodifiableMap(result);
     }
 
     @Override
@@ -103,8 +95,8 @@ public class ErrorComponentMap {
         sb.append("ErrorComponentMap=[");
 
         int i1 = 0;
-        for (Map.Entry<Long, MAPErrorMessage> entry : data.entrySet()) {
-            Long id = entry.getKey();
+        for (Map.Entry<String, MAPErrorMessage> entry : entrySet()) {
+            Long id = Long.valueOf(entry.getKey().substring(2));
             MAPErrorMessage mapErrorMessage = entry.getValue();
 
             if (i1 == 0)

@@ -143,8 +143,15 @@ public abstract class HttpClientSbb extends ChildSbb {
 
                         FastList<MAPMessage> mapMessages = dialog.getMAPMessages();
                         if (mapMessages != null) {
-                            for (FastList.Node<MAPMessage> n = mapMessages.head(), end = mapMessages.tail(); (n = n.getNext()) != end;) {
-                                switch (n.getValue().getMessageType()) {
+                            for (int i = 0; i < mapMessages.size(); i++) {
+                                MAPMessage msg = mapMessages.get(i);
+                                if (msg == null) {
+                                    if (logger.isWarningEnabled()) {
+                                        logger.warning("HttpClientSbb: NULL message at index " + i);
+                                    }
+                                    continue;
+                                }
+                                switch (msg.getMessageType()) {
                                 case unstructuredSSRequest_Request:
                                     super.ussdStatAggregator.updateUssdRequestOperations();
                                     super.ussdStatAggregator.updateMessagesSent();
@@ -398,8 +405,8 @@ public abstract class HttpClientSbb extends ChildSbb {
                 super.httpClientActivityContextInterfaceFactory = (HttpClientActivityContextInterfaceFactory) super.sbbContext
                         .getActivityContextInterfaceFactory(httpClientRATypeID);
             } catch (Exception e) {
-                httpClientRATypeID = new ResourceAdaptorTypeID("HttpClientResourceAdaptorType", "org.mobicents", "4.0");
-                logger.info("Trying to use HttpClientResourceAdaptorType - org.mobicents");
+                httpClientRATypeID = new ResourceAdaptorTypeID("HttpClientResourceAdaptorType", "org.restcomm", "4.0");
+                logger.info("Trying to use HttpClientResourceAdaptorType - org.restcomm");
                 super.httpClientActivityContextInterfaceFactory = (HttpClientActivityContextInterfaceFactory) super.sbbContext
                         .getActivityContextInterfaceFactory(httpClientRATypeID);
             }

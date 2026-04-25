@@ -23,9 +23,13 @@ import java.util.Map;
 
 import javax.naming.OperationNotSupportedException;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlElementWrapper;
+import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlRootElement;
 
 import org.restcomm.protocols.ss7.map.api.MAPApplicationContext;
 import org.restcomm.protocols.ss7.map.api.MAPApplicationContextName;
@@ -77,6 +81,7 @@ import org.restcomm.protocols.ss7.tcap.asn.comp.ReturnResultLast;
  * @author amit bhayani
  * 
  */
+@JacksonXmlRootElement(localName = "dialog")
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class XmlMAPDialog implements MAPDialog {
@@ -128,22 +133,30 @@ public class XmlMAPDialog implements MAPDialog {
 
 	private static final String USER_OBJECT = "userObject";
 
+	@JsonProperty("appCntx")
 	// Application Context of this Dialog
 	protected MAPApplicationContext appCntx;
 
+	@JsonDeserialize(as = SccpAddressImpl.class)
 	protected SccpAddress localAddress;
+	@JsonDeserialize(as = SccpAddressImpl.class)
 	protected SccpAddress remoteAddress;
 
+	@JsonProperty("mapUserAbortChoice")
 	private MAPUserAbortChoice mapUserAbortChoice = null;
 	private MAPAbortProviderReason mapAbortProviderReason = null;
 	private MAPRefuseReason mapRefuseReason = null;
+	@JsonProperty("refuseReason")
 	private Reason refuseReason = null;
+	@JsonProperty("prearrangedEnd")
 	private Boolean prearrangedEnd = null;
 	private Boolean dialogTimedOut = null;
 	private Boolean emptyDialogHandshake = null;
     private Boolean sriPart = null;
 
+	@JsonProperty("localId")
 	private Long localId;
+	@JsonProperty("remoteId")
 	private Long remoteId;
 	
 	private int networkId;
@@ -153,19 +166,27 @@ public class XmlMAPDialog implements MAPDialog {
 //	private boolean redirectRequest = false;
 
 	@JsonProperty("processInvokeWithoutAnswerIds")
+	@JacksonXmlElementWrapper(useWrapping = false)
 	private FastList<Long> processInvokeWithoutAnswerIds = new FastList<>();
 
 	@JsonProperty("mapMessages")
+	@JacksonXmlElementWrapper(useWrapping = false)
 	private FastList<MAPMessage> mapMessages = new FastList<>();
 
+    @JsonProperty("errorComponents")
     private ErrorComponentMap errorComponents = new ErrorComponentMap();
+    @JsonProperty("rejectComponents")
     private RejectComponentMap rejectComponents = new RejectComponentMap();
 
+	@JsonProperty("state")
 	private MAPDialogState state = MAPDialogState.IDLE;
 
+	@JsonProperty("destReference")
 	private AddressString destReference;
+	@JsonProperty("origReference")
 	private AddressString origReference;
 
+	@JsonProperty("messageType")
 	private MessageType messageType = MessageType.Unknown;
 
 	private Long invokeTimedOut = null;
@@ -442,18 +463,28 @@ public class XmlMAPDialog implements MAPDialog {
 		return this.mapMessages.remove(mapMessage);
 	}
 
+	@JsonIgnore
 	public FastList<MAPMessage> getMAPMessages() {
+		if (this.mapMessages == null) {
+			this.mapMessages = new FastList<>();
+		}
 		return this.mapMessages;
 	}
 
+	@JsonIgnore
 	public FastList<Long> getProcessInvokeWithoutAnswerIds() {
+		if (this.processInvokeWithoutAnswerIds == null) {
+			this.processInvokeWithoutAnswerIds = new FastList<>();
+		}
 		return this.processInvokeWithoutAnswerIds;
 	}
 
+    @JsonIgnore
     public Map<Long, MAPErrorMessage> getErrorComponents() {
         return errorComponents.getErrorComponents();
     }
 
+    @JsonIgnore
     public Map<Long, Problem> getRejectComponents() {
         return rejectComponents.getRejectComponents();
     }

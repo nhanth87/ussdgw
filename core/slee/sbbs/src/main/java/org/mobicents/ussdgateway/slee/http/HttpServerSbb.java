@@ -164,6 +164,7 @@ public abstract class HttpServerSbb extends ChildServerSbb implements SriParent 
 		this.cancelTimer();
 
 		boolean success = false;
+		Exception processingException = null;
 		try {
 			eventContext.suspendDelivery(EVENT_SUSPEND_TIMEOUT);
 			this.setEventContextCMP(eventContext);
@@ -180,8 +181,15 @@ public abstract class HttpServerSbb extends ChildServerSbb implements SriParent 
 
 			// This is initial request, if its not NTFY, we need session
 			if (mapMessages != null) {
-				for (FastList.Node<MAPMessage> n = mapMessages.head(), end = mapMessages.tail(); (n = n.getNext()) != end;) {
-					final MAPMessage rawMessage = n.getValue();
+				if (logger.isInfoEnabled()) {
+					logger.info("onPost: mapMessages size=" + mapMessages.size() + ", dialog=" + xmlMAPDialog);
+				}
+				for (int i = 0; i < mapMessages.size(); i++) {
+					final MAPMessage rawMessage = mapMessages.get(i);
+					if (rawMessage == null) {
+						logger.warning("onPost: NULL message at index " + i + " in mapMessages! dialog=" + xmlMAPDialog);
+						continue;
+					}
 					final MAPMessageType type = rawMessage.getMessageType();
 
 					if (logger.isFinestEnabled())
@@ -212,6 +220,8 @@ public abstract class HttpServerSbb extends ChildServerSbb implements SriParent 
 						break;
 					}
 				}// for
+			} else {
+				logger.warning("onPost: mapMessages is NULL! dialog=" + xmlMAPDialog);
 			}
             if (msisdn == null) {
                 throw new Exception("MSISDN in a received initial HTTP PUSH request is null");
@@ -265,6 +275,7 @@ public abstract class HttpServerSbb extends ChildServerSbb implements SriParent 
 			success = true;
 
 		} catch (Exception e) {
+			processingException = e;
 			super.logger.severe("Error while processing received HTTP POST request", e);
 		} finally {
 			if (!success) {
@@ -284,7 +295,17 @@ public abstract class HttpServerSbb extends ChildServerSbb implements SriParent 
 			            if (httpEventContext != null) {
 			                HttpServletRequestEvent httpRequest = (HttpServletRequestEvent) httpEventContext.getEvent();
 			                HttpServletResponse response = httpRequest.getResponse();
-			                response.setStatus(HttpServletResponse.SC_OK);
+			                if (processingException instanceof IOException || processingException instanceof IllegalArgumentException) {
+			                    response.setStatus(HttpServletResponse.SC_BAD_REQUEST); // 400
+			                } else {
+			                    response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR); // 500
+			                }
+			                // Ensure response is flushed so client receives it
+			                try {
+			                    response.flushBuffer();
+			                } catch (IOException ioe) {
+			                    logger.severe("Failed to flush HTTP error response", ioe);
+			                }
 			            }
 					}
 
@@ -325,8 +346,15 @@ public abstract class HttpServerSbb extends ChildServerSbb implements SriParent 
 
             FastList<MAPMessage> mapMessages = xmlMAPDialog.getMAPMessages();
             if (mapMessages != null) {
-                for (FastList.Node<MAPMessage> n = mapMessages.head(), end = mapMessages.tail(); (n = n.getNext()) != end;) {
-                    final MAPMessage rawMessage = n.getValue();
+                if (logger.isInfoEnabled()) {
+                    logger.info("onSessionPost: mapMessages size=" + mapMessages.size() + ", dialog=" + xmlMAPDialog);
+                }
+                for (int i = 0; i < mapMessages.size(); i++) {
+                    final MAPMessage rawMessage = mapMessages.get(i);
+                    if (rawMessage == null) {
+                        logger.warning("onSessionPost: NULL message at index " + i + " in mapMessages! dialog=" + xmlMAPDialog);
+                        continue;
+                    }
                     final MAPMessageType messagetype = rawMessage.getMessageType();
 
                     switch (messagetype) {
@@ -342,6 +370,8 @@ public abstract class HttpServerSbb extends ChildServerSbb implements SriParent 
                         break;
                     }
                 }
+            } else {
+                logger.warning("onSessionPost: mapMessages is NULL! dialog=" + xmlMAPDialog);
             }
 
             this.setXmlMAPDialog(xmlMAPDialog);
@@ -939,8 +969,8 @@ public abstract class HttpServerSbb extends ChildServerSbb implements SriParent 
                 super.httpServletRaActivityContextInterfaceFactory = (HttpServletRaActivityContextInterfaceFactory) super.sbbContext
                         .getActivityContextInterfaceFactory(httpServerRATypeID);
             } catch (Exception e) {
-                httpServerRATypeID = new ResourceAdaptorTypeID("HttpServletResourceAdaptorType", "org.mobicents", "1.0");
-                logger.info("Trying to use HttpServletResourceAdaptorType - org.mobicents");
+                httpServerRATypeID = new ResourceAdaptorTypeID("HttpServletResourceAdaptorType", "org.restcomm", "1.0");
+                logger.info("Trying to use HttpServletResourceAdaptorType - org.restcomm");
                 super.httpServletRaActivityContextInterfaceFactory = (HttpServletRaActivityContextInterfaceFactory) super.sbbContext
                         .getActivityContextInterfaceFactory(httpServerRATypeID);
             }
@@ -1053,9 +1083,9 @@ public abstract class HttpServerSbb extends ChildServerSbb implements SriParent 
     private XmlMAPDialog deserializeDialog(HttpServletRequestEvent event) throws IOException, XMLStreamException, Exception {
 
         HttpServletRequest request = event.getRequest();
-        if (!request.getContentType().equals(CONTENT_TYPE)) {
-            throw new IOException("Wrong content type '" + request.getContentType() + "', should be '" + CONTENT_TYPE
-                    + "'");
+        String contentType = request.getContentType();
+        if (contentType == null || (!contentType.equals("text/xml") && !contentType.equals("application/xml"))) {
+            throw new IOException("Wrong content type '" + contentType + "', should be 'text/xml' or 'application/xml'");
         }
 
         request.setCharacterEncoding("UTF-8");
@@ -1073,7 +1103,21 @@ public abstract class HttpServerSbb extends ChildServerSbb implements SriParent 
             super.logger.info(new String(bos.toByteArray()));
         }
 
-        XmlMAPDialog d = getEventsSerializeFactory().deserialize(bos.toByteArray());
+        byte[] rawBytes = bos.toByteArray();
+        String rawXml = new String(rawBytes, "UTF-8");
+        if (logger.isInfoEnabled()) {
+            logger.info("deserializeDialog: raw XML length=" + rawBytes.length + ", content=" + rawXml);
+        }
+
+        XmlMAPDialog d = getEventsSerializeFactory().deserialize(rawBytes);
+
+        if (logger.isInfoEnabled()) {
+            FastList<MAPMessage> msgs = d.getMAPMessages();
+            logger.info("deserializeDialog: deserialized dialog=" + d
+                + ", appCntx=" + d.getApplicationContext()
+                + ", mapMessagesSize=" + (msgs != null ? msgs.size() : "null")
+                + ", tcapMessageType=" + d.getTCAPMessageType());
+        }
 
         return d;
     }

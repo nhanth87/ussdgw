@@ -660,6 +660,11 @@ public abstract class ChildSbb extends USSDBaseSbb implements ChildInterface {
 
 	public abstract String getUserObject();
 
+	// httpSessionId CMP field getter/setter
+	public abstract void setHttpSessionId(String httpSessionId);
+
+	public abstract String getHttpSessionId();
+
 	// //////////////////
 	// SBB LO methods //
 	// //////////////////
