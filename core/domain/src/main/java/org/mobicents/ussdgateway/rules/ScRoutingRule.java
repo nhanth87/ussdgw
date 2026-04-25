@@ -34,7 +34,7 @@ import org.mobicents.ussdgateway.UssdOAMMessages;
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class ScRoutingRule {
+public class ScRoutingRule implements java.io.Serializable {
 
     @JsonProperty("ruleType")
     private ScRoutingRuleType ruleType = ScRoutingRuleType.SIP;

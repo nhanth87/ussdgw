@@ -344,8 +344,12 @@ public class HTTPPush implements HTTPPushMBean {
 		Boolean prearrangedEnd = dialog.getPrearrangedEnd();
 		FastList<MAPMessage> capMessages = dialog.getMAPMessages();
 
-		for (FastList.Node<MAPMessage> n = capMessages.head(), end = capMessages.tail(); (n = n.getNext()) != end;) {
-			MAPMessage message = n.getValue();
+		for (int i = 0; i < capMessages.size(); i++) {
+			MAPMessage message = capMessages.get(i);
+			if (message == null) {
+				addStatusEntry("NULL message at index " + i);
+				continue;
+			}
 			MAPMessageType type = message.getMessageType();
 			switch (type) {
 			case unstructuredSSRequest_Response:
