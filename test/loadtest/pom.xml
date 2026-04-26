@@ -72,6 +72,11 @@
 			<version>4.12.0</version>
 		</dependency>
 		<dependency>
+			<groupId>io.netty</groupId>
+			<artifactId>netty-codec-http</artifactId>
+			<version>4.2.11.Final</version>
+		</dependency>
+		<dependency>
 			<groupId>org.mobicents.ussd</groupId>
 			<artifactId>xml</artifactId>
 			<version>${project.version}</version>
