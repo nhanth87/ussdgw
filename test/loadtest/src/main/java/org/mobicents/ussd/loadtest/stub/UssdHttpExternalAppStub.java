@@ -30,34 +30,43 @@ import java.io.ByteArrayInputStream;
 import java.util.List;
 
 /**
- * Standalone HTTP test stub for USSD Gateway load testing.
+ * Standalone External HTTP Application Stub for USSD Gateway integration testing.
  *
- * <p>Replaces the need for WildFly + ussdhttpdemo.war during HTTP load tests.
- * This lightweight Netty-based server directly handles XmlMAPDialog serialization
- * and responds like the original TestServlet, but without any JEE container overhead.
+ * <p>This stub simulates an external HTTP application that USSD Gateway calls via
+ * HTTP Client RA. It receives serialized XmlMAPDialog over HTTP POST, processes
+ * USSD business logic, and returns the response XmlMAPDialog.
  *
  * <p>Usage:
  * <pre>
- *   java -cp ussd-loadtest-10k.jar org.mobicents.ussd.loadtest.stub.UssdHttpTestStub [port]
+ *   java -cp ussd-loadtest-10k.jar org.mobicents.ussd.loadtest.stub.UssdHttpExternalAppStub [port]
+ * </pre>
+ *
+ * <p>In USSD Gateway routing rule, configure URL pointing to this stub:
+ * <pre>
+ *   &lt;ruleurl&gt;http://localhost:8082/ussd&lt;/ruleurl&gt;
  * </pre>
  *
  * <p>Endpoints:
  * <ul>
- *   <li>POST /test - Accepts XmlMAPDialog, returns appropriate USSD response</li>
+ *   <li>POST /ussd - Accepts XmlMAPDialog, returns USSD response</li>
  *   <li>GET  /health - Returns "OK"</li>
  * </ul>
  */
-public class UssdHttpTestStub {
+public class UssdHttpExternalAppStub {
 
     private static final org.apache.log4j.Logger logger =
-            org.apache.log4j.Logger.getLogger(UssdHttpTestStub.class);
+            org.apache.log4j.Logger.getLogger(UssdHttpExternalAppStub.class);
+
+    private static final String[] SUPPORTED_CONTENT_TYPES = {
+            "text/xml", "application/xml"
+    };
 
     private final int port;
     private EventLoopGroup bossGroup;
     private EventLoopGroup workerGroup;
     private Channel channel;
 
-    public UssdHttpTestStub(int port) {
+    public UssdHttpExternalAppStub(int port) {
         this.port = port;
     }
 
@@ -74,15 +83,16 @@ public class UssdHttpTestStub {
                         ChannelPipeline p = ch.pipeline();
                         p.addLast(new HttpServerCodec());
                         p.addLast(new HttpObjectAggregator(65536));
-                        p.addLast(new UssdStubHandler());
+                        p.addLast(new ExternalAppHandler());
                     }
                 })
                 .option(ChannelOption.SO_BACKLOG, 128)
                 .childOption(ChannelOption.SO_KEEPALIVE, true);
 
         channel = b.bind(port).sync().channel();
-        logger.info("USSD HTTP Test Stub started on port " + port);
-        System.out.println("[UssdHttpTestStub] Started on http://localhost:" + port + "/test");
+        logger.info("USSD External HTTP App Stub started on port " + port);
+        System.out.println("[UssdHttpExternalAppStub] Started on http://localhost:" + port + "/ussd");
+        System.out.println("[INFO] Configure USSD Gateway routing rule URL to: http://localhost:" + port + "/ussd");
     }
 
     public void stop() {
@@ -95,13 +105,13 @@ public class UssdHttpTestStub {
         if (workerGroup != null) {
             workerGroup.shutdownGracefully();
         }
-        logger.info("USSD HTTP Test Stub stopped.");
+        logger.info("USSD External HTTP App Stub stopped.");
     }
 
     /**
-     * Netty channel handler for USSD stub logic.
+     * Netty handler for external USSD app logic.
      */
-    private static class UssdStubHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
+    private static class ExternalAppHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
 
         private final EventsSerializeFactory factory = new EventsSerializeFactory();
 
@@ -115,7 +125,7 @@ public class UssdHttpTestStub {
                 return;
             }
 
-            if (uri.equals("/test") && method == HttpMethod.POST) {
+            if (uri.equals("/ussd") && method == HttpMethod.POST) {
                 handleUssdRequest(ctx, req);
                 return;
             }
@@ -125,21 +135,34 @@ public class UssdHttpTestStub {
 
         private void handleUssdRequest(ChannelHandlerContext ctx, FullHttpRequest req) {
             try {
+                // Validate content type
+                String contentType = req.headers().get(HttpHeaderNames.CONTENT_TYPE);
+                if (contentType == null || !isSupportedContentType(contentType)) {
+                    sendTextResponse(ctx, HttpResponseStatus.UNSUPPORTED_MEDIA_TYPE,
+                            "Expected Content-Type: text/xml or application/xml");
+                    return;
+                }
+
                 ByteBuf content = req.content();
                 byte[] body = new byte[content.readableBytes()];
                 content.readBytes(body);
 
+                if (body.length == 0) {
+                    sendTextResponse(ctx, HttpResponseStatus.BAD_REQUEST, "Empty request body");
+                    return;
+                }
+
                 XmlMAPDialog dialog = factory.deserialize(new ByteArrayInputStream(body));
 
                 if (logger.isDebugEnabled()) {
-                    logger.debug("Received dialog: " + dialog);
+                    logger.debug("Received dialog from USSD Gateway: " + dialog);
                 }
 
                 List<MAPMessage> messages = dialog.getMAPMessages();
                 MessageType tcapType = dialog.getTCAPMessageType();
 
                 if (messages == null || messages.isEmpty()) {
-                    sendTextResponse(ctx, HttpResponseStatus.BAD_REQUEST, "No MAP messages");
+                    sendTextResponse(ctx, HttpResponseStatus.BAD_REQUEST, "No MAP messages in dialog");
                     return;
                 }
 
@@ -149,41 +172,44 @@ public class UssdHttpTestStub {
                 byte[] responseData;
 
                 if (tcapType == MessageType.Begin && msgType == MAPMessageType.processUnstructuredSSRequest_Request) {
-                    // Initial request → respond with UnstructuredSSRequest (Continue dialog)
+                    // Initial USSD request from subscriber → respond with menu (Continue dialog)
                     ProcessUnstructuredSSRequest request = (ProcessUnstructuredSSRequest) msg;
                     CBSDataCodingScheme dcs = request.getDataCodingScheme();
 
+                    // Simulate business logic: show menu
                     USSDString ussdStr = new USSDStringImpl(
-                            "USSD String : Hello World\n 1. Balance\n 2. Texts Remaining", dcs, null);
-                    UnstructuredSSRequest ussdRequest = new UnstructuredSSRequestImpl(dcs, ussdStr, null, null);
+                            "USSD Menu:\n1. Check Balance\n2. Data Usage\n3. Exit", dcs, null);
+                    UnstructuredSSRequest menuRequest = new UnstructuredSSRequestImpl(dcs, ussdStr, null, null);
 
                     dialog.reset();
                     dialog.setTCAPMessageType(MessageType.Continue);
                     dialog.setCustomInvokeTimeOut(25000);
-                    dialog.addMAPMessage(ussdRequest);
+                    dialog.addMAPMessage(menuRequest);
 
                     responseData = factory.serialize(dialog);
 
-                } else if (tcapType == MessageType.Begin && msgType == MAPMessageType.unstructuredSSRequest_Request) {
-                    // Inbound USSD Push (network-initiated) → respond with UnstructuredSSResponse (Continue)
-                    UnstructuredSSRequest request = (UnstructuredSSRequest) msg;
-                    CBSDataCodingScheme dcs = request.getDataCodingScheme();
-
-                    USSDString ussdStr = new USSDStringImpl("1", dcs, null);
-                    UnstructuredSSResponse ussdResponse = new UnstructuredSSResponseImpl(dcs, ussdStr, null, null);
-
-                    dialog.reset();
-                    dialog.setTCAPMessageType(MessageType.Continue);
-                    dialog.addMAPMessage(ussdResponse);
-
-                    responseData = factory.serialize(dialog);
+                    if (logger.isInfoEnabled()) {
+                        logger.info("Sent USSD menu response for: " + request.getUSSDString().getString(null));
+                    }
 
                 } else if (tcapType == MessageType.Continue && msgType == MAPMessageType.unstructuredSSRequest_Response) {
-                    // User response → respond with ProcessUnstructuredSSResponse (End dialog)
+                    // User selected an option → respond with final message (End dialog)
                     UnstructuredSSResponse response = (UnstructuredSSResponse) msg;
 
+                    USSDString userChoice = response.getUSSDString();
+                    String choice = userChoice != null ? userChoice.getString(null) : "";
+
+                    String responseText;
+                    if (choice.contains("1")) {
+                        responseText = "Your balance is $10.50";
+                    } else if (choice.contains("2")) {
+                        responseText = "Data used: 2.3GB / 5GB";
+                    } else {
+                        responseText = "Thank you for using our service!";
+                    }
+
                     CBSDataCodingScheme dcs = new CBSDataCodingSchemeImpl(0x0f);
-                    USSDString ussdStr = new USSDStringImpl("Thank You!", null, null);
+                    USSDString ussdStr = new USSDStringImpl(responseText, null, null);
                     ProcessUnstructuredSSResponse procResp = new ProcessUnstructuredSSResponseImpl(dcs, ussdStr);
                     procResp.setInvokeId(response.getInvokeId());
 
@@ -194,9 +220,14 @@ public class UssdHttpTestStub {
 
                     responseData = factory.serialize(dialog);
 
+                    if (logger.isInfoEnabled()) {
+                        logger.info("Sent final USSD response for choice: " + choice);
+                    }
+
                 } else {
+                    logger.warn("Unexpected TCAP=" + tcapType + " MAP=" + msgType);
                     sendTextResponse(ctx, HttpResponseStatus.BAD_REQUEST,
-                            "Unexpected TCAP=" + tcapType + " MAP=" + msgType);
+                            "Unexpected message: TCAP=" + tcapType + " MAP=" + msgType);
                     return;
                 }
 
@@ -205,14 +236,25 @@ public class UssdHttpTestStub {
                         HttpResponseStatus.OK,
                         Unpooled.wrappedBuffer(responseData)
                 );
-                resp.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/xml; charset=utf-8");
+                resp.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/xml; charset=utf-8");
                 resp.headers().set(HttpHeaderNames.CONTENT_LENGTH, responseData.length);
                 ctx.writeAndFlush(resp);
 
             } catch (Exception e) {
-                logger.error("Error processing USSD request", e);
-                sendTextResponse(ctx, HttpResponseStatus.INTERNAL_SERVER_ERROR, "Error: " + e.getMessage());
+                logger.error("Error processing USSD request from gateway", e);
+                sendTextResponse(ctx, HttpResponseStatus.INTERNAL_SERVER_ERROR,
+                        "Error: " + e.getMessage());
             }
+        }
+
+        private boolean isSupportedContentType(String contentType) {
+            String lower = contentType.toLowerCase();
+            for (String supported : SUPPORTED_CONTENT_TYPES) {
+                if (lower.contains(supported)) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         private void sendTextResponse(ChannelHandlerContext ctx, HttpResponseStatus status, String text) {
@@ -233,9 +275,9 @@ public class UssdHttpTestStub {
     }
 
     public static void main(String[] args) throws Exception {
-        int port = args.length > 0 ? Integer.parseInt(args[0]) : 8080;
+        int port = args.length > 0 ? Integer.parseInt(args[0]) : 8082;
 
-        UssdHttpTestStub stub = new UssdHttpTestStub(port);
+        UssdHttpExternalAppStub stub = new UssdHttpExternalAppStub(port);
         stub.start();
 
         System.out.println("Press Enter to stop...");
