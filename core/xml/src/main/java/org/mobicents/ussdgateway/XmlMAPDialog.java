@@ -27,8 +27,14 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonTypeName;
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.databind.JsonSerializer;
+import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlElementWrapper;
+import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlRootElement;
 
 import org.restcomm.protocols.ss7.map.api.MAPApplicationContext;
@@ -143,24 +149,43 @@ public class XmlMAPDialog implements MAPDialog {
 	protected SccpAddress remoteAddress;
 
 	@JsonProperty("mapUserAbortChoice")
+	@JacksonXmlProperty(isAttribute = true, localName = "mapUserAbortChoice")
 	private MAPUserAbortChoice mapUserAbortChoice = null;
+	@JsonProperty("mapAbortProviderReason")
+	@JacksonXmlProperty(isAttribute = true, localName = "mapAbortProviderReason")
 	private MAPAbortProviderReason mapAbortProviderReason = null;
+	@JsonProperty("mapRefuseReason")
+	@JacksonXmlProperty(isAttribute = true, localName = "mapRefuseReason")
 	private MAPRefuseReason mapRefuseReason = null;
 	@JsonProperty("refuseReason")
+	@JacksonXmlProperty(isAttribute = true, localName = "refuseReason")
 	private Reason refuseReason = null;
 	@JsonProperty("prearrangedEnd")
+	@JacksonXmlProperty(isAttribute = true, localName = "prearrangedEnd")
 	private Boolean prearrangedEnd = null;
+	@JsonProperty("dialogTimedOut")
+	@JacksonXmlProperty(isAttribute = true, localName = "dialogTimedOut")
 	private Boolean dialogTimedOut = null;
+	@JsonProperty("emptyDialogHandshake")
+	@JacksonXmlProperty(isAttribute = true, localName = "emptyDialogHandshake")
 	private Boolean emptyDialogHandshake = null;
+	@JsonProperty("sriPart")
+	@JacksonXmlProperty(isAttribute = true, localName = "sriPart")
     private Boolean sriPart = null;
 
 	@JsonProperty("localId")
+	@JacksonXmlProperty(isAttribute = true, localName = "localId")
 	private Long localId;
 	@JsonProperty("remoteId")
+	@JacksonXmlProperty(isAttribute = true, localName = "remoteId")
 	private Long remoteId;
 	
+	@JsonProperty("networkId")
+	@JacksonXmlProperty(isAttribute = true, localName = "networkId")
 	private int networkId;
 
+	@JsonProperty("returnMessageOnError")
+	@JacksonXmlProperty(isAttribute = true, localName = "returnMessageOnError")
 	private boolean returnMessageOnError = true;
 
 //	private boolean redirectRequest = false;
@@ -169,29 +194,76 @@ public class XmlMAPDialog implements MAPDialog {
 	@JacksonXmlElementWrapper(useWrapping = false)
 	private FastList<Long> processInvokeWithoutAnswerIds = new FastList<>();
 
-	@JsonProperty("mapMessages")
+	@JsonIgnore
 	@JacksonXmlElementWrapper(useWrapping = false)
 	private FastList<MAPMessage> mapMessages = new FastList<>();
+	
+	/**
+	 * Custom serializer for mapMessages to produce javolution-compatible XML format.
+	 * Uses ToXmlGenerator to force element name from @JacksonXmlRootElement of each
+	 * implementation class.
+	 */
+	public static class MAPMessageListSerializer extends JsonSerializer<FastList<MAPMessage>> {
+		@Override
+		public void serialize(FastList<MAPMessage> value, JsonGenerator gen, SerializerProvider serializers) throws java.io.IOException {
+			for (int i = 0; i < value.size(); i++) {
+				MAPMessage msg = value.get(i);
+				String elementName = resolveElementName(msg.getClass());
+				if (gen instanceof com.fasterxml.jackson.dataformat.xml.ser.ToXmlGenerator) {
+					com.fasterxml.jackson.dataformat.xml.ser.ToXmlGenerator xmlGen = (com.fasterxml.jackson.dataformat.xml.ser.ToXmlGenerator) gen;
+					javax.xml.namespace.QName qname = new javax.xml.namespace.QName(elementName);
+					xmlGen.startWrappedValue(null, qname);
+					gen.writeObject(msg);
+					xmlGen.finishWrappedValue(null, qname);
+				} else {
+					gen.writeObjectField(elementName, msg);
+				}
+			}
+		}
+		
+		private String resolveElementName(Class<?> clazz) {
+			JacksonXmlRootElement ann = clazz.getAnnotation(JacksonXmlRootElement.class);
+			if (ann != null && ann.localName() != null && !ann.localName().isEmpty()) {
+				return ann.localName();
+			}
+			JsonTypeName jtn = clazz.getAnnotation(JsonTypeName.class);
+			if (jtn != null && !jtn.value().isEmpty()) {
+				return jtn.value();
+			}
+			return clazz.getSimpleName();
+		}
+	}
 
-    @JsonProperty("errorComponents")
+    @JsonProperty("errComponents")
     private ErrorComponentMap errorComponents = new ErrorComponentMap();
     @JsonProperty("rejectComponents")
     private RejectComponentMap rejectComponents = new RejectComponentMap();
 
-	@JsonProperty("state")
+	@JsonIgnore
 	private MAPDialogState state = MAPDialogState.IDLE;
 
-	@JsonProperty("destReference")
+	@JsonProperty("destinationReference")
+	@JacksonXmlProperty(isAttribute = true, localName = "destinationReference")
+	@JsonDeserialize(as = AddressStringImpl.class)
 	private AddressString destReference;
-	@JsonProperty("origReference")
+	@JsonProperty("originationReference")
+	@JacksonXmlProperty(isAttribute = true, localName = "originationReference")
+	@JsonDeserialize(as = AddressStringImpl.class)
 	private AddressString origReference;
 
-	@JsonProperty("messageType")
+	@JsonProperty("type")
+	@JacksonXmlProperty(isAttribute = true, localName = "type")
 	private MessageType messageType = MessageType.Unknown;
 
+	@JsonProperty("invokeTimedOut")
+	@JacksonXmlProperty(isAttribute = true, localName = "invokeTimedOut")
 	private Long invokeTimedOut = null;
+	@JsonProperty("customInvokeTimeout")
+	@JacksonXmlProperty(isAttribute = true, localName = "customInvokeTimeout")
 	private Integer customInvokeTimeOut = null;
 
+	@JsonProperty("userObject")
+	@JacksonXmlProperty(isAttribute = true, localName = "userObject")
 	private String userObject = null;
 
 	public XmlMAPDialog() {
@@ -463,7 +535,9 @@ public class XmlMAPDialog implements MAPDialog {
 		return this.mapMessages.remove(mapMessage);
 	}
 
-	@JsonIgnore
+	@JsonProperty("mapMessages")
+	@JacksonXmlElementWrapper(useWrapping = false)
+	@JsonSerialize(using = MAPMessageListSerializer.class)
 	public FastList<MAPMessage> getMAPMessages() {
 		if (this.mapMessages == null) {
 			this.mapMessages = new FastList<>();
