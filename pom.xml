@@ -59,7 +59,7 @@
 		<!-- restcomm but not strictly ss7 -->
 		<asn.version>2.2.0-143</asn.version>
 		<stream.version>1.0.0.FINAL</stream.version>
-		<sctp.version>2.0.13</sctp.version>
+		<sctp.version>2.0.14</sctp.version>
 		<commons.version>1.0.0.CR1</commons.version>
 		<metrics.version>3.1.0</metrics.version>
 
