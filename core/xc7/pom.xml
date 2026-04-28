@@ -49,6 +49,13 @@
 			<version>3.4.3.Final</version>
 		</dependency>
 		
+		<!-- JCTools - High-performance queues for 1M TPS -->
+		<dependency>
+			<groupId>org.jctools</groupId>
+			<artifactId>jctools-core</artifactId>
+			<version>4.0.5</version>
+		</dependency>
+		
 	</dependencies>
 
 	<build>

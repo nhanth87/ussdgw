@@ -185,6 +185,32 @@ public class EventsSerializeFactory {
                 return XmlMAPDialog.deserializeMAPUserAbortChoice(str);
             }
         });
+        
+        // Add deserializer for AddressIndicator - handles legacy javolution XML format with numeric string "2"
+        module.addDeserializer(org.restcomm.protocols.ss7.indicator.AddressIndicator.class, 
+            new JsonDeserializer<org.restcomm.protocols.ss7.indicator.AddressIndicator>() {
+            @Override
+            public org.restcomm.protocols.ss7.indicator.AddressIndicator deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
+                // Handle both numeric value and complex object
+                if (p.currentToken().isScalarValue()) {
+                    // Simple numeric string like "2" - parse directly
+                    String val = p.getValueAsString();
+                    try {
+                        int intVal = Integer.parseInt(val);
+                        // Use first available enum value for protocol version
+                        org.restcomm.protocols.ss7.sccp.SccpProtocolVersion[] versions = org.restcomm.protocols.ss7.sccp.SccpProtocolVersion.values();
+                        if (versions.length > 0) {
+                            return new org.restcomm.protocols.ss7.indicator.AddressIndicator((byte)intVal, versions[0]);
+                        }
+                    } catch (Exception e) {
+                        // If parsing fails, try to deserialize as object
+                    }
+                }
+                // Fallback: deserialize as complex object
+                return ctxt.readValue(p, org.restcomm.protocols.ss7.indicator.AddressIndicator.class);
+            }
+        });
+        
         this.xmlMapper.registerModule(module);
         
         // Register subtypes for polymorphic deserialization

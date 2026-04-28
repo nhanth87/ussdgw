@@ -23,6 +23,7 @@ import org.restcomm.protocols.ss7.map.api.service.supplementary.UnstructuredSSRe
 import org.restcomm.protocols.ss7.map.datacoding.CBSDataCodingSchemeImpl;
 import org.restcomm.protocols.ss7.map.primitives.USSDStringImpl;
 import org.restcomm.protocols.ss7.map.service.supplementary.UnstructuredSSRequestImpl;
+import org.restcomm.protocols.ss7.map.service.supplementary.UnstructuredSSResponseImpl;
 import org.restcomm.protocols.ss7.map.service.supplementary.ProcessUnstructuredSSResponseImpl;
 import org.restcomm.protocols.ss7.tcap.api.MessageType;
 
@@ -170,7 +171,7 @@ public class UssdHttpTestStub {
                     CBSDataCodingScheme dcs = request.getDataCodingScheme();
 
                     USSDString ussdStr = new USSDStringImpl("1", dcs, null);
-                    UnstructuredSSResponse ussdResponse = new UnstructuredSSResponseImpl(dcs, ussdStr, null, null);
+                    UnstructuredSSResponse ussdResponse = new UnstructuredSSResponseImpl(dcs, ussdStr);
 
                     dialog.reset();
                     dialog.setTCAPMessageType(MessageType.Continue);

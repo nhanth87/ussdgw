@@ -217,7 +217,7 @@ public class UssdHttpLoadGenerator {
     public static void main(String[] args) throws Exception {
         if (args.length < 2) {
             System.out.println("Usage: UssdHttpLoadGenerator <url> <targetTps> [threads] [maxConcurrent]");
-            System.out.println("  url           - USSD Gateway HTTP endpoint base URL (e.g. http://localhost:8080/ussdhttpdemo/)");
+            System.out.println("  url           - USSD Gateway HTTP endpoint base URL (e.g. http://localhost:8080/restcomm/)");
             System.out.println("  targetTps     - Target transactions per second");
             System.out.println("  threads       - Worker threads (default: targetTps/500)");
             System.out.println("  maxConcurrent - Max concurrent requests (default: targetTps*5)");
