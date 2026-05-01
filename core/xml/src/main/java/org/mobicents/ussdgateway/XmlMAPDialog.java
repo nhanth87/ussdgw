@@ -143,8 +143,10 @@ public class XmlMAPDialog implements MAPDialog {
 	// Application Context of this Dialog
 	protected MAPApplicationContext appCntx;
 
+	@JsonIgnore
 	@JsonDeserialize(as = SccpAddressImpl.class)
 	protected SccpAddress localAddress;
+	@JsonIgnore
 	@JsonDeserialize(as = SccpAddressImpl.class)
 	protected SccpAddress remoteAddress;
 

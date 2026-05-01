@@ -1,14 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <jboss-deployment-structure xmlns="urn:jboss:deployment-structure:1.2">
     <deployment>
-        <!-- Exclude WildFly's built-in jackson modules to use WAR-bundled jackson 2.15.2 -->
+        <!-- Prioritize WAR-bundled Jackson 2.15.2 over WildFly system modules -->
+        <local-last value="false"/>
+        <!-- Exclude ALL WildFly jackson modules -->
         <exclusions>
             <module name="com.fasterxml.jackson.core.jackson-core"/>
             <module name="com.fasterxml.jackson.core.jackson-databind"/>
             <module name="com.fasterxml.jackson.core.jackson-annotations"/>
             <module name="com.fasterxml.jackson.jaxrs.jackson-jaxrs-json-provider"/>
             <module name="com.fasterxml.jackson.dataformat.jackson-dataformat-xml"/>
+            <module name="com.fasterxml.jackson.datatype.jackson-datatype-jdk8"/>
+            <module name="com.fasterxml.jackson.datatype.jackson-datatype-jsr310"/>
+            <module name="org.jboss.resteasy.resteasy-jackson2-provider"/>
+            <module name="org.jboss.resteasy.resteasy-jackson-provider"/>
         </exclusions>
-        <local-last value="true"/>
+        <exclude-subsystems>
+            <subsystem name="resteasy"/>
+            <subsystem name="jaxrs"/>
+        </exclude-subsystems>
     </deployment>
 </jboss-deployment-structure>
