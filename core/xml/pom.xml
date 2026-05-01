@@ -50,8 +50,14 @@
 			<artifactId>okhttp</artifactId>
 			<version>4.12.0</version>
 		</dependency>
-		<dependency>
-			<groupId>com.google.code.gson</groupId>
+		<!-- SLF4J API for logging -->
+<dependency>
+<groupId>org.slf4j</groupId>
+<artifactId>slf4j-api</artifactId>
+<version>1.7.36</version>
+</dependency>
+<dependency>
+<groupId>com.google.code.gson</groupId>
 			<artifactId>gson</artifactId>
 			<version>${gson.version}</version>
 		</dependency>
@@ -114,3 +120,4 @@
 		</plugins>
 	</build>
 </project>
+
