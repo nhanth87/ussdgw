@@ -40,6 +40,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.restcomm.protocols.ss7.map.api.MAPApplicationContext;
 import org.restcomm.protocols.ss7.map.api.MAPApplicationContextName;
@@ -95,9 +100,18 @@ import org.restcomm.protocols.ss7.tcap.asn.comp.Problem;
  */
 public class EventsSerializeFactory {
 
+    // SLF4J Logger for proper error logging and debugging
+    private static final Logger logger = LoggerFactory.getLogger(EventsSerializeFactory.class);
+    
     private static final String DIALOG = "dialog";
     private static final String TYPE = "type";
     private static final String TAB = "\t";
+    
+    // Track deserialization results for debugging
+    private int totalDeserializations = 0;
+    private int failedDeserializations = 0;
+    private final List<String> recentDeserializationErrors = new ArrayList<>();
+    private static final int MAX_ERROR_HISTORY = 20;
 
     // Thread-safe singleton
     private static volatile EventsSerializeFactory instance;
@@ -321,9 +335,21 @@ public class EventsSerializeFactory {
             return new byte[0];
         }
         
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        xmlMapper.writeValue(baos, dialog);
-        return baos.toByteArray();
+        try {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            xmlMapper.writeValue(baos, dialog);
+            byte[] result = baos.toByteArray();
+            
+            if (logger.isDebugEnabled()) {
+                String xmlOutput = new String(result, charset);
+                logger.debug("=== SERIALIZED XML OUTPUT ===\n{}", xmlOutput);
+            }
+            
+            return result;
+        } catch (Exception e) {
+            logger.error("Serialization Error: {}", e.getMessage(), e);
+            throw e;
+        }
     }
 
     /**
@@ -392,6 +418,11 @@ public class EventsSerializeFactory {
             return null;
         }
         
+        String xmlContent = new String(data, charset);
+        if (logger.isDebugEnabled()) {
+            logger.debug("=== INCOMING XML TO DESERIALIZE ===\n{}", xmlContent);
+        }
+        
         JsonNode root = xmlMapper.readTree(new ByteArrayInputStream(data));
         return deserializeFromJsonNode(root);
     }
@@ -420,6 +451,10 @@ public class EventsSerializeFactory {
     private XmlMAPDialog deserializeFromJsonNode(JsonNode root) throws Exception {
         if (root == null || root.isNull()) {
             return null;
+        }
+        
+        if (logger.isDebugEnabled()) {
+            logger.debug("=== PARSED JSON NODE ===\n{}", root.toString());
         }
         
         com.fasterxml.jackson.databind.node.ObjectNode standardNode = xmlMapper.createObjectNode();
@@ -482,6 +517,10 @@ public class EventsSerializeFactory {
         }
         
         // Manually deserialize MAP messages by looking up type name from wrapper field name
+        int successfullyDeserialized = 0;
+        int failedDeserializationsCount = 0;
+        StringBuilder deserializationErrors = new StringBuilder();
+        
         for (com.fasterxml.jackson.databind.node.ObjectNode wrapper : messageWrappers) {
             java.util.Iterator<String> wf = wrapper.fieldNames();
             while (wf.hasNext()) {
@@ -493,12 +532,29 @@ public class EventsSerializeFactory {
                         MAPMessage msg = (MAPMessage) xmlMapper.treeToValue(msgNode, clazz);
                         if (msg != null) {
                             dialog.addMAPMessage(msg);
+                            successfullyDeserialized++;
                         }
                     } catch (Exception e) {
-                        System.err.println("Failed to deserialize MAPMessage type=" + typeName + ", error: " + e.getMessage());
+                        failedDeserializationsCount++;
+                        String errorMsg = "Failed to deserialize MAPMessage type=" + typeName + ", error: " + e.getMessage();
+                        logger.warn("XML Deserialization Error: {}", errorMsg);
+                        logger.debug("XML node content: {}", msgNode.toString());
+                        deserializationErrors.append(errorMsg).append("; ");
+                        addDeserializationError(typeName, e.getMessage());
                     }
                 }
             }
+        }
+        
+        // Log summary for this deserialization
+        if (failedDeserializationsCount > 0 || successfullyDeserialized > 0) {
+            logger.info("MAP Deserialization Summary: {} messages successfully deserialized, {} failed. Errors: {}", 
+                successfullyDeserialized, failedDeserializationsCount, deserializationErrors.toString());
+        }
+        
+        // Store deserialization status in dialog userObject for downstream handling
+        if (failedDeserializationsCount > 0) {
+            dialog.setUserObject("Deserialization partial failure: " + failedDeserializationsCount + " messages failed, " + successfullyDeserialized + " succeeded");
         }
         
         // Manually deserialize error components
@@ -515,13 +571,48 @@ public class EventsSerializeFactory {
                             // invokeId not available in flat format; skip for now
                         }
                     } catch (Exception e) {
-                        System.err.println("Failed to deserialize MAPErrorMessage type=" + typeName + ", error: " + e.getMessage());
+                        String errorMsg = "Failed to deserialize MAPErrorMessage type=" + typeName + ", error: " + e.getMessage();
+                        logger.warn("XML ErrorComponent Deserialization Error: {}", errorMsg);
+                        addDeserializationError(typeName, e.getMessage());
                     }
                 }
             }
         }
         
+        // Update statistics
+        totalDeserializations++;
+        failedDeserializations += failedDeserializationsCount;
+        
         return dialog;
+    }
+    
+    /**
+     * Track deserialization error for debugging
+     */
+    private void addDeserializationError(String typeName, String error) {
+        synchronized (recentDeserializationErrors) {
+            String errorEntry = "[" + typeName + "]: " + error;
+            recentDeserializationErrors.add(errorEntry);
+            if (recentDeserializationErrors.size() > MAX_ERROR_HISTORY) {
+                recentDeserializationErrors.remove(0);
+            }
+        }
+    }
+    
+    /**
+     * Get recent deserialization errors for debugging
+     */
+    public List<String> getRecentDeserializationErrors() {
+        synchronized (recentDeserializationErrors) {
+            return new ArrayList<>(recentDeserializationErrors);
+        }
+    }
+    
+    /**
+     * Get deserialization statistics
+     */
+    public String getDeserializationStats() {
+        return String.format("Deserialization Stats: %d total, %d failed messages", totalDeserializations, failedDeserializations);
     }
     
     /**
