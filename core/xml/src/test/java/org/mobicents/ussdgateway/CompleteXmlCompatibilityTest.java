@@ -552,7 +552,7 @@ public class CompleteXmlCompatibilityTest {
             "中文测试",
             "Special: !@#$%^&*()",
             "Mixed 123 ABC",
-            "Very long message ".repeat(50)
+            new String(new char[50]).replace("\0", "Very long message ")
         };
         
         for (String ussdContent : testStrings) {

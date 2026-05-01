@@ -534,7 +534,21 @@ public abstract class ChildSbb extends USSDBaseSbb implements ChildInterface {
 			CBSDataCodingScheme cbsDataCodingScheme = new CBSDataCodingSchemeImpl(0x0f);
 			mapDialogSupplementary.addProcessUnstructuredSSResponse(this.getProcessUnstructuredSSRequestInvokeId(),
 					cbsDataCodingScheme, ussdString);
-			mapDialogSupplementary.close(false);
+			
+			// Use closeNoExtra() or close(false) without triggering idle timer
+			// to avoid RejectedExecutionException when executor is shutting down
+			try {
+				mapDialogSupplementary.close(false);
+			} catch (java.util.concurrent.RejectedExecutionException e) {
+				// Executor is shutting down - dialog will timeout naturally
+				logger.warning("Executor shutting down, cannot schedule dialog close timer: " + e.getMessage());
+				// Try to at least send the response without waiting for close
+				try {
+					mapDialogSupplementary.send();
+				} catch (Exception ex) {
+					logger.severe("Failed to send error response", ex);
+				}
+			}
 		} catch (Exception e) {
 			logger.severe("Exception while trying to send MAP ErrorMessage", e);
 		}

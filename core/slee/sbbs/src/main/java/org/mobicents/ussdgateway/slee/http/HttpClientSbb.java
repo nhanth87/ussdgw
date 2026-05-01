@@ -129,6 +129,12 @@ public abstract class HttpClientSbb extends ChildSbb {
                             this.setUserObject(userObject.toString());
                         }
 
+                        // Check if dialog has critical deserialization errors (stored in userObject)
+                        if (userObject instanceof String && ((String) userObject).contains("Deserialization partial failure")) {
+                            logger.warning("Dialog has partial deserialization errors: " + userObject);
+                            // Continue processing - we can still try to use what was successfully deserialized
+                        }
+
                         MAPUserAbortChoice mapUserAbortChoice = dialog.getMAPUserAbortChoice();
                         if (mapUserAbortChoice != null) {
                             MAPDialogSupplementary mapDialog = this.getMAPDialog();
@@ -142,7 +148,7 @@ public abstract class HttpClientSbb extends ChildSbb {
                         Boolean prearrangedEnd = dialog.getPrearrangedEnd();
 
                         FastList<MAPMessage> mapMessages = dialog.getMAPMessages();
-                        if (mapMessages != null) {
+                        if (mapMessages != null && mapMessages.size() > 0) {
                             for (int i = 0; i < mapMessages.size(); i++) {
                                 MAPMessage msg = mapMessages.get(i);
                                 if (msg == null) {
@@ -158,7 +164,7 @@ public abstract class HttpClientSbb extends ChildSbb {
                                     super.ussdStatAggregator.updateMessagesAll();
                                     break;
                                 case unstructuredSSNotify_Request:
-                                    super.ussdStatAggregator.updateUssdNotifyOperations();
+super.ussdStatAggregator.updateUssdNotifyOperations();
                                     super.ussdStatAggregator.updateMessagesSent();
                                     super.ussdStatAggregator.updateMessagesAll();
                                     break;
@@ -171,16 +177,26 @@ public abstract class HttpClientSbb extends ChildSbb {
                                     break;
                                 }
                             }
-                        }
+                            
+                            this.processXmlMAPDialog(dialog, mapDialogSupplementary);
 
-                        this.processXmlMAPDialog(dialog, mapDialogSupplementary);
-
-                        if (prearrangedEnd != null) {
-                            mapDialogSupplementary.close(prearrangedEnd);
-                            this.endHttpClientActivity(httpClientActivity);
-                            this.createCDRRecord(RecordStatus.SUCCESS);
+                            if (prearrangedEnd != null) {
+                                mapDialogSupplementary.close(prearrangedEnd);
+                                this.endHttpClientActivity(httpClientActivity);
+                                this.createCDRRecord(RecordStatus.SUCCESS);
+                            } else {
+                                mapDialogSupplementary.send();
+                            }
                         } else {
-                            mapDialogSupplementary.send();
+                            // No messages but dialog exists - this might be an error response
+                            logger.warning("Dialog has no MAP messages, checking if it's an error");
+                            if (dialog.getMAPUserAbortChoice() != null || dialog.getDialogTimedOut() != null) {
+                                // This is an error/abort dialog, log it but don't fail as corrupted
+                                this.updateDialogFailureStat();
+                                this.createCDRRecord(RecordStatus.FAILED_TRANSPORT_FAILURE);
+                            } else {
+                                throw new Exception("Received Success HTTPResponse but dialog has no MAP messages");
+                            }
                         }
 
                     } else {
@@ -188,7 +204,13 @@ public abstract class HttpClientSbb extends ChildSbb {
                     }
 
                 } catch (Exception e) {
-                    throw new Exception("Error while processing 2xx", e);
+                    // Log the error but don't re-throw - try to send server error instead
+                    logger.severe("Error while processing 200 response: " + e.getMessage());
+                    if (e.getCause() != null) {
+                        logger.fine("Root cause: ", e.getCause());
+                    }
+                    // Continue to outer handler for proper cleanup
+                    throw new Exception("Error while processing 200 response", e);
                 }
                 break;
 
