@@ -92,8 +92,19 @@ public class TestServlet extends HttpServlet {
 	public void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
 		ServletInputStream is = request.getInputStream();
 		try {
-			XmlMAPDialog original = factory.deserialize(is);
-			Long dialogId = original.getLocalDialogId();
+			// Read raw XML for logging
+			byte[] rawBytes = new byte[request.getContentLength()];
+			int totalRead = 0;
+			while (totalRead < rawBytes.length) {
+				int read = is.read(rawBytes, totalRead, rawBytes.length - totalRead);
+				if (read < 0) break;
+				totalRead += read;
+			}
+			String rawXml = new String(rawBytes, "UTF-8");
+			logger.info("JENNY-TESTSERVLET-RAW-XML: " + rawXml);
+			
+			XmlMAPDialog original = factory.deserialize(new java.io.ByteArrayInputStream(rawBytes));
+			Long dialogId = original != null ? original.getLocalDialogId() : null;
 			if (logger.isInfoEnabled()) {
 				logger.info("doPost. DialogId=" + dialogId + " Dialog = " + original);
 			}
@@ -132,20 +143,27 @@ public class TestServlet extends HttpServlet {
 									+ processUnstructuredSSRequest.getUSSDString().getString(null));
 						}
 						if (dialogId != null) {
-							dialogInvokeIds.put(dialogId, processUnstructuredSSRequest.getInvokeId());
+							long reqInvokeId = processUnstructuredSSRequest.getInvokeId();
+							logger.info("TestServlet: dialogId=" + dialogId + ", request invokeId=" + reqInvokeId);
+							dialogInvokeIds.put(dialogId, reqInvokeId);
 							dialogMenuLevels.put(dialogId, 1);
 						}
 
-						ussdStr = new USSDStringImpl("USSD String : Hello World\n 1. Balance\n 2. Texts Remaining",
+						// Load test mode: return ProcessUnstructuredSSResponse immediately to close dialog
+						// instead of UnstructuredSSRequest which requires multi-turn interaction
+						ussdStr = new USSDStringImpl("USSD String : Hello World",
 								cbsDataCodingScheme, null);
-						UnstructuredSSRequest unstructuredSSRequestIndication = new UnstructuredSSRequestImpl(
-								cbsDataCodingScheme, ussdStr, null, null);
+						ProcessUnstructuredSSResponse processUnstructuredSSResponse = new ProcessUnstructuredSSResponseImpl(
+								cbsDataCodingScheme, ussdStr);
+						long respInvokeId = processUnstructuredSSRequest.getInvokeId();
+						logger.info("TestServlet: setting response invokeId=" + respInvokeId);
+						processUnstructuredSSResponse.setInvokeId(respInvokeId);
 
 						original.reset();
-						original.setUserObject("DialogId=" + dialogId + ", MenuLevel=1");
-						original.setTCAPMessageType(MessageType.Continue);
-						original.setCustomInvokeTimeOut(25000);
-						original.addMAPMessage(unstructuredSSRequestIndication);
+						original.setUserObject("DialogId=" + dialogId + ", LoadTest=1");
+						original.setTCAPMessageType(MessageType.End);
+						original.addMAPMessage(processUnstructuredSSResponse);
+						original.close(false);
 
 						byte[] data = serializeResponse(original);
 

@@ -150,7 +150,10 @@ public abstract class ChildSbb extends USSDBaseSbb implements ChildInterface {
 						+ evt.getMAPDialog());
 			}
 
-			this.setProcessUnstructuredSSRequestInvokeId(evt.getInvokeId());
+			long evtInvokeId = evt.getInvokeId();
+			long wrappedInvokeId = ((MAPEvent) evt).getWrappedEvent().getInvokeId();
+			logger.info("JENNY-CHILDSBB-RECV: evt.invokeId=" + evtInvokeId + " wrapped.invokeId=" + wrappedInvokeId + " class=" + ((MAPEvent) evt).getWrappedEvent().getClass().getName());
+			this.setProcessUnstructuredSSRequestInvokeId(evtInvokeId);
 
 			XmlMAPDialog dialog = this.getXmlMAPDialog();
 			dialog.addMAPMessage(((MAPEvent) evt).getWrappedEvent());
@@ -350,12 +353,13 @@ public abstract class ChildSbb extends USSDBaseSbb implements ChildInterface {
 	}
 
 	public void onDialogTimeout(DialogTimeout evt, ActivityContextInterface aci) {
-		if (logger.isWarningEnabled()) {
-			this.logger.warning("Rx : onDialogTimeout " + evt);
-		}
+		MAPDialog mapDialog = evt.getMAPDialog();
+		logger.warning(String.format("JENNY-DIALOG-TIMEOUT: localDialogId=%s remoteDialogId=%s state=%s", 
+			mapDialog != null ? mapDialog.getLocalDialogId() : "null",
+			mapDialog != null ? mapDialog.getRemoteDialogId() : "null",
+			mapDialog != null ? mapDialog.getState() : "null"));
 
 		try {
-		    MAPDialog mapDialog = evt.getMAPDialog();
 		    mapDialog.keepAlive();
 		    MAPUserAbortChoice mapUserAbortChoice = this.mapParameterFactory.createMAPUserAbortChoice();
 		    mapUserAbortChoice.setProcedureCancellationReason(ProcedureCancellationReason.callRelease);
@@ -795,8 +799,10 @@ public abstract class ChildSbb extends USSDBaseSbb implements ChildInterface {
 	private void setTimer(ActivityContextInterface ac) {
 		TimerOptions options = new TimerOptions();
 		long waitingTime = this.getUssdPropertiesManagement().getDialogTimeout();
-		// Set the timer on ACI
 		TimerID timerID = this.timerFacility.setTimer(ac, null, System.currentTimeMillis() + waitingTime, options);
 		this.setTimerID(timerID);
+		MAPDialogSupplementary mapDialog = this.getMAPDialog();
+		logger.info(String.format("JENNY-TIMER-SET: localDialogId=%s waitingTime=%d timerID=%s", 
+			mapDialog != null ? mapDialog.getLocalDialogId() : "null", waitingTime, timerID));
 	}
 }
