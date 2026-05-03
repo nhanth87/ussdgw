@@ -133,19 +133,23 @@ public abstract class ParentSbb extends USSDBaseSbb {
 
 					// Create child of Http SBB and call local method
 					ChildRelation relation = this.getHttpClientSbb();
-					ChildSbbLocalObject child = (ChildSbbLocalObject) relation.create();
-					child.setCallFact(call);
-					child.setXmlMAPDialog(this.getDialog());
-					forwardEvent(child, aci);
+					if (relation.isEmpty()) {
+						ChildSbbLocalObject child = (ChildSbbLocalObject) relation.create();
+						child.setCallFact(call);
+						child.setXmlMAPDialog(this.getDialog());
+						forwardEvent(child, aci);
+					}
 				} else {
                     super.ussdStatAggregator.updateDialogsSipEstablished();
 
 					// Create child of Sip SBB and call local method
 					ChildRelation relation = this.getSipSbb();
-					ChildSbbLocalObject child = (ChildSbbLocalObject) relation.create();
-					child.setCallFact(call);
-					child.setXmlMAPDialog(this.getDialog());
-					forwardEvent(child, aci);
+					if (relation.isEmpty()) {
+						ChildSbbLocalObject child = (ChildSbbLocalObject) relation.create();
+						child.setCallFact(call);
+						child.setXmlMAPDialog(this.getDialog());
+						forwardEvent(child, aci);
+					}
 				}
 			}
 
@@ -161,7 +165,10 @@ public abstract class ParentSbb extends USSDBaseSbb {
 	private void forwardEvent(SbbLocalObject child, ActivityContextInterface aci) {
 		try {
 			aci.attach(child);
-			aci.detach(sbbContext.getSbbLocalObject());
+			// Do NOT detach parent - if parent is removed, SLEE container cascades
+			// removal to all child SBB entities, causing the child to miss the
+			// current ProcessUnstructuredSSRequest event. Parent will be cleaned
+			// up automatically when the MAP dialog activity ends.
 		} catch (Exception e) {
 			logger.severe("Unexpected error: ", e);
 		}

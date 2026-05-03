@@ -204,6 +204,7 @@ public class USSDBaseSbb implements Sbb {
 	protected void processXmlMAPDialog(XmlMAPDialog xmlMAPDialog, MAPDialogSupplementary mapDialog)
 			throws MAPException {
         FastList<MAPMessage> mapMessages = xmlMAPDialog.getMAPMessages();
+		logger.info("JENNY-USSDBASE-DEBUG: processXmlMAPDialog mapMessages=" + (mapMessages != null ? mapMessages.size() : -1) + " mapDialog=" + mapDialog);
         if (mapMessages != null) {
             for (int i = 0; i < mapMessages.size(); i++) {
                 MAPMessage msg = mapMessages.get(i);
@@ -213,13 +214,16 @@ public class USSDBaseSbb implements Sbb {
                     }
                     continue;
                 }
+				logger.info("JENNY-USSDBASE-DEBUG: processing msg " + i + "/" + mapMessages.size() + " type=" + msg.getMessageType());
                 Long invokeId = this.processMAPMessageFromApplication(msg, mapDialog, xmlMAPDialog.getCustomInvokeTimeOut());
+				logger.info("JENNY-USSDBASE-DEBUG: msg " + i + " done, invokeId=" + invokeId);
             }
         }
 	}
 
 	protected Long processMAPMessageFromApplication(MAPMessage mapMessage,
 			MAPDialogSupplementary mapDialogSupplementary, Integer customInvokeTimeout) throws MAPException {
+		logger.info("JENNY-USSDBASE-DEBUG: processMAPMessageFromApplication msgType=" + mapMessage.getMessageType() + " mapDialog=" + mapDialogSupplementary + " customTimeout=" + customInvokeTimeout);
 		switch (mapMessage.getMessageType()) {
 		case unstructuredSSRequest_Request:
 			UnstructuredSSRequest unstructuredSSRequest = (UnstructuredSSRequest) mapMessage;
@@ -239,9 +243,11 @@ public class USSDBaseSbb implements Sbb {
 
 		case processUnstructuredSSRequest_Response:
 			ProcessUnstructuredSSResponse processUnstructuredSSResponse = (ProcessUnstructuredSSResponse) mapMessage;
-			mapDialogSupplementary.addProcessUnstructuredSSResponse(processUnstructuredSSResponse.getInvokeId(),
+			long respInvokeId = processUnstructuredSSResponse.getInvokeId();
+			logger.info("JENNY-USSDBASE-RESPONSE: invokeId=" + respInvokeId + " dcs=" + processUnstructuredSSResponse.getDataCodingScheme() + " ussd=" + processUnstructuredSSResponse.getUSSDString());
+			mapDialogSupplementary.addProcessUnstructuredSSResponse(respInvokeId,
 					processUnstructuredSSResponse.getDataCodingScheme(), processUnstructuredSSResponse.getUSSDString());
-			return processUnstructuredSSResponse.getInvokeId();
+			return respInvokeId;
 		case unstructuredSSNotify_Request:
 			// notify, this means dialog will end;
 			final UnstructuredSSNotifyRequest ntfyRequest = (UnstructuredSSNotifyRequest) mapMessage;

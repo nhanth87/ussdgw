@@ -336,14 +336,21 @@ public class EventsSerializeFactory {
         }
         
         try {
+            // Log invokeId of each MAP message before serialization
+            java.util.List<org.restcomm.protocols.ss7.map.api.MAPMessage> msgs = dialog.getMAPMessages();
+            if (msgs != null) {
+                for (int i = 0; i < msgs.size(); i++) {
+                    org.restcomm.protocols.ss7.map.api.MAPMessage msg = msgs.get(i);
+                    logger.info("JENNY-SERIALIZE-PRE: message[{}] type={} invokeId={}", i, msg.getMessageType(), msg.getInvokeId());
+                }
+            }
+            
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             xmlMapper.writeValue(baos, dialog);
             byte[] result = baos.toByteArray();
             
-            if (logger.isDebugEnabled()) {
-                String xmlOutput = new String(result, charset);
-                logger.debug("=== SERIALIZED XML OUTPUT ===\n{}", xmlOutput);
-            }
+            String xmlOutput = new String(result, charset);
+            logger.info("JENNY-SERIALIZE-XML: {}", xmlOutput);
             
             return result;
         } catch (Exception e) {
@@ -529,8 +536,10 @@ public class EventsSerializeFactory {
                 Class<?> clazz = aliasToClass.get(typeName);
                 if (clazz != null && MAPMessage.class.isAssignableFrom(clazz)) {
                     try {
+                        logger.info("JENNY-DESERIALIZE-NODE: typeName={} msgNode={}", typeName, msgNode.toString());
                         MAPMessage msg = (MAPMessage) xmlMapper.treeToValue(msgNode, clazz);
                         if (msg != null) {
+                            logger.info("JENNY-DESERIALIZE-POST: type={} invokeId={}", msg.getMessageType(), msg.getInvokeId());
                             dialog.addMAPMessage(msg);
                             successfullyDeserialized++;
                         }
@@ -586,6 +595,36 @@ public class EventsSerializeFactory {
         return dialog;
     }
     
+    /**
+     * Normalize Jackson XML attribute prefixes (@attr -> attr) for treeToValue deserialization.
+     * Jackson XML readTree() encodes XML attributes with '@' prefix, but treeToValue()
+     * expects plain property names matching @JacksonXmlProperty annotations.
+     */
+    private JsonNode normalizeXmlAttributes(JsonNode node) {
+        if (node == null || !node.isObject()) {
+            return node;
+        }
+        com.fasterxml.jackson.databind.node.ObjectNode result = xmlMapper.createObjectNode();
+        java.util.Iterator<String> fieldNames = node.fieldNames();
+        while (fieldNames.hasNext()) {
+            String fieldName = fieldNames.next();
+            String normalizedName = fieldName.startsWith("@") ? fieldName.substring(1) : fieldName;
+            JsonNode child = node.get(fieldName);
+            if (child.isObject()) {
+                result.set(normalizedName, normalizeXmlAttributes(child));
+            } else if (child.isArray()) {
+                com.fasterxml.jackson.databind.node.ArrayNode arr = result.arrayNode();
+                for (JsonNode item : child) {
+                    arr.add(normalizeXmlAttributes(item));
+                }
+                result.set(normalizedName, arr);
+            } else {
+                result.set(normalizedName, child);
+            }
+        }
+        return result;
+    }
+
     /**
      * Track deserialization error for debugging
      */
