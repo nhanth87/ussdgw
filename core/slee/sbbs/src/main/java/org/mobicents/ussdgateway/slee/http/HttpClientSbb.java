@@ -83,21 +83,26 @@ public abstract class HttpClientSbb extends ChildSbb {
 		HttpResponse response = event.getHttpResponse();
 		HttpClientActivity httpClientActivity = ((HttpClientActivity) aci.getActivity());
 
-		logger.info("JENNY-HTTP-RESPONSE: status=" + (response != null ? response.getStatusLine() : "null") 
-			+ " finalMessageSent=" + this.getFinalMessageSent()
-			+ " activity=" + httpClientActivity);
+		// JENNY-OPT: Moved to fine-level logging to reduce overhead at 5000 TPS
+		if (logger.isFineEnabled()) {
+			logger.fine("JENNY-HTTP-RESPONSE: status=" + (response != null ? response.getStatusLine() : "null") 
+				+ " finalMessageSent=" + this.getFinalMessageSent()
+				+ " activity=" + httpClientActivity);
+		}
 
         if (this.getFinalMessageSent()) {
             // dialog was already terminated
-			logger.info("JENNY-HTTP-RESPONSE: finalMessageSent=true, ending HTTP activity");
+			if (logger.isFineEnabled()) logger.fine("JENNY-HTTP-RESPONSE: finalMessageSent=true, ending HTTP activity");
             httpClientActivity.endActivity();
             return;
         }
 
 		MAPDialogSupplementary mapDialogSupplementary = this.getMAPDialog();
-		logger.info("JENNY-HTTP-RESPONSE: mapDialog=" + mapDialogSupplementary 
-			+ " state=" + (mapDialogSupplementary != null ? mapDialogSupplementary.getState() : "null")
-			+ " finalMessageSent=" + this.getFinalMessageSent());
+		if (logger.isFineEnabled()) {
+			logger.fine("JENNY-HTTP-RESPONSE: mapDialog=" + mapDialogSupplementary 
+				+ " state=" + (mapDialogSupplementary != null ? mapDialogSupplementary.getState() : "null")
+				+ " finalMessageSent=" + this.getFinalMessageSent());
+		}
 		if (mapDialogSupplementary == null) {
 			logger.warning("JENNY-HTTP-RESPONSE: MAP dialog is null, dialog may have been released or timed out. Skipping response processing.");
 			httpClientActivity.endActivity();
@@ -118,7 +123,7 @@ public abstract class HttpClientSbb extends ChildSbb {
             StatusLine statusLine = response.getStatusLine();
 
             int statusCode = statusLine.getStatusCode();
-			logger.info("JENNY-HTTP-RESPONSE: statusCode=" + statusCode);
+			if (logger.isFineEnabled()) logger.fine("JENNY-HTTP-RESPONSE: statusCode=" + statusCode);
 
             switch (statusCode) {
 
@@ -128,7 +133,7 @@ public abstract class HttpClientSbb extends ChildSbb {
                     if (response.getEntity() != null) {
                         xmlContent = getResultData(response.getEntity());
 
-						logger.info("JENNY-HTTP-RESPONSE: xmlContent length=" + (xmlContent != null ? xmlContent.length : -1));
+						if (logger.isFineEnabled()) logger.fine("JENNY-HTTP-RESPONSE: xmlContent length=" + (xmlContent != null ? xmlContent.length : -1));
 
                         if (logger.isFineEnabled()) {
                             logger.fine("Received answer content: \n" + new String(xmlContent));
@@ -141,10 +146,12 @@ public abstract class HttpClientSbb extends ChildSbb {
                         EventsSerializeFactory factory = this.getEventsSerializeFactory();
                         XmlMAPDialog dialog = factory.deserialize(xmlContent);
 
-						logger.info("JENNY-HTTP-RESPONSE: deserialized dialog=" + dialog 
-							+ " userObject=" + (dialog != null ? dialog.getUserObject() : "n/a")
-							+ " prearrangedEnd=" + (dialog != null ? dialog.getPrearrangedEnd() : "n/a")
-							+ " mapMessages=" + (dialog != null ? dialog.getMAPMessages() : "n/a"));
+						if (logger.isFineEnabled()) {
+							logger.fine("JENNY-HTTP-RESPONSE: deserialized dialog=" + dialog 
+								+ " userObject=" + (dialog != null ? dialog.getUserObject() : "n/a")
+								+ " prearrangedEnd=" + (dialog != null ? dialog.getPrearrangedEnd() : "n/a")
+								+ " mapMessages=" + (dialog != null ? dialog.getMAPMessages() : "n/a"));
+						}
 
                         if (dialog == null) {
                             throw new Exception("Received Success HTTPResponse but couldn't deserialize to Dialog. Dialog is null");
@@ -173,7 +180,7 @@ public abstract class HttpClientSbb extends ChildSbb {
                         Boolean prearrangedEnd = dialog.getPrearrangedEnd();
 
                         FastList<MAPMessage> mapMessages = dialog.getMAPMessages();
-						logger.info("JENNY-HTTP-RESPONSE: mapMessages size=" + (mapMessages != null ? mapMessages.size() : -1));
+						if (logger.isFineEnabled()) logger.fine("JENNY-HTTP-RESPONSE: mapMessages size=" + (mapMessages != null ? mapMessages.size() : -1));
 
                         if (mapMessages != null && mapMessages.size() > 0) {
                             for (int i = 0; i < mapMessages.size(); i++) {
@@ -205,9 +212,9 @@ super.ussdStatAggregator.updateUssdNotifyOperations();
                                 }
                             }
                             
-							logger.info("JENNY-HTTP-RESPONSE: calling processXmlMAPDialog...");
+							if (logger.isFineEnabled()) logger.fine("JENNY-HTTP-RESPONSE: calling processXmlMAPDialog...");
                             this.processXmlMAPDialog(dialog, mapDialogSupplementary);
-							logger.info("JENNY-HTTP-RESPONSE: processXmlMAPDialog done. prearrangedEnd=" + prearrangedEnd);
+							if (logger.isFineEnabled()) logger.fine("JENNY-HTTP-RESPONSE: processXmlMAPDialog done. prearrangedEnd=" + prearrangedEnd);
 
                             if (prearrangedEnd != null) {
                                 mapDialogSupplementary.close(prearrangedEnd);
@@ -216,7 +223,7 @@ super.ussdStatAggregator.updateUssdNotifyOperations();
                             } else {
                                 mapDialogSupplementary.send();
                             }
-							logger.info("JENNY-HTTP-RESPONSE: MAP dialog sent/closed successfully");
+							if (logger.isFineEnabled()) logger.fine("JENNY-HTTP-RESPONSE: MAP dialog sent/closed successfully");
                         } else {
                             // No messages but dialog exists - this might be an error response
                             logger.warning("JENNY-HTTP-RESPONSE: Dialog has no MAP messages, checking if it's an error");
@@ -291,8 +298,10 @@ super.ussdStatAggregator.updateUssdNotifyOperations();
 		pushContent(uriRequest, ACCEPTED_CONTENT_TYPE, CONTENT_ENCODING, content);
 
 		MAPDialogSupplementary mapDialog = this.getMAPDialog();
-		logger.info(String.format("JENNY-HTTP-POST: localDialogId=%s url=%s contentLength=%d", 
-			mapDialog != null ? mapDialog.getLocalDialogId() : "null", url, content != null ? content.length : 0));
+		if (logger.isFineEnabled()) {
+			logger.fine(String.format("JENNY-HTTP-POST: localDialogId=%s url=%s contentLength=%d", 
+				mapDialog != null ? mapDialog.getLocalDialogId() : "null", url, content != null ? content.length : 0));
+		}
 
 		if (logger.isFineEnabled()) {
 			logger.fine("Executing HttpPost=" + uriRequest);
