@@ -381,6 +381,10 @@ public class TestServlet extends HttpServlet {
 			sb.append("  ").append(addressStringToXml("originationReference", dialog.getReceivedOrigReference())).append("\n");
 		}
 
+		// Empty error and reject components for javolution compatibility
+		sb.append("  <errComponents/>\n");
+		sb.append("  <rejectComponents/>\n");
+
 		// MAP messages
 		if (messages != null) {
 			for (int i = 0; i < messages.size(); i++) {
