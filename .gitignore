@@ -63,3 +63,6 @@ release-wildfly/**
 !release-wildfly/extensions-build.xml
 !release-wildfly/standalone-patched.xml
 !release-wildfly/slee-container-module-patched.xml
+
+# Understand knowledge graph
+.understand-anything/

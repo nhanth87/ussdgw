@@ -22,13 +22,13 @@
 	<jar>jars/tcap-api-9.2.11.jar</jar>
 	<jar>jars/isup-impl-9.2.11.jar</jar>
 	<jar>jars/jnr-constants-0.10.3.jar</jar>
-	<jar>jars/restcomm-slee-ra-map-library-9.2.9.jar</jar>
+	<jar>jars/restcomm-slee-ra-map-library-9.2.11.jar</jar>
 	<jar>jars/netty-transport-4.2.11.Final.jar</jar>
 	<jar>jars/ss7-ext-api-9.2.11.jar</jar>
 	<jar>jars/jackson-dataformat-xml-2.15.2.jar</jar>
 	<jar>jars/netty-codec-4.2.11.Final.jar</jar>
 	<jar>jars/commons-congestion-1.0.134.jar</jar>
-	<jar>jars/restcomm-slee-ra-map-ratype-9.2.9.jar</jar>
+	<jar>jars/restcomm-slee-ra-map-ratype-9.2.11.jar</jar>
 	<jar>jars/netty-buffer-4.2.11.Final.jar</jar>
 	<jar>jars/log4j-1.2.14.jar</jar>
 	<jar>jars/jackson-annotations-2.15.2.jar</jar>
@@ -89,7 +89,7 @@
 	<jar>jars/jffi-1.3.9.jar</jar>
 	<jar>jars/jain-sip-api-1.2.0.jar</jar>
 	<jar>jars/restcomm-slee-ra-jdbc-ratype-7.2.0-113.jar</jar>
-	<jar>jars/restcomm-slee-ra-map-events-9.2.9.jar</jar>
+	<jar>jars/restcomm-slee-ra-map-events-9.2.11.jar</jar>
 	<jar>jars/okhttp-4.12.0.jar</jar>
 	<jar>jars/jcip-annotations-1.0-1.jar</jar>
 	<jar>jars/netty-handler-4.2.11.Final.jar</jar>
