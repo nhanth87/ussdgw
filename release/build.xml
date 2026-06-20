@@ -70,8 +70,8 @@
 	<property name="restcomm-jdbc-ra.download.jar.url" value="${github.url}/jain-slee.jdbc/releases/download/${restcomm-jdbc-ra.version}/${restcomm-jdbc-ra.download.jar.file}" />
 
 	<!-- HTTP RA versions from local Maven repo (jain-slee-http-okhttp) -->
-	<property name="restcomm-http-client.version" value="7.0.0-SNAPSHOT" />
-	<property name="restcomm-http-servlet.version" value="7.0.0-SNAPSHOT" />
+	<property name="restcomm-http-client.version" value="7.0.0" />
+	<property name="restcomm-http-servlet.version" value="7.0.0" />
 	<property name="restcomm-jdbc-ra.distro.jar.path" value="${checkout.dir}/${restcomm-jdbc-ra.download.jar.file}" />
 	<property name="restcomm-jdbc-ra.distro.docs.path" value="${checkout.dir}/${restcomm-jdbc-ra.download.docs.file}" />
 

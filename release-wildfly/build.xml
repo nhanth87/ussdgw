@@ -16,8 +16,9 @@
     <property name="deploy.dir" value="${jboss.home}/standalone/deployments" />
     <property name="jboss.modules.path" value="${jboss.home}/modules/system/layers/base" />
 
-    <!-- javassist jar for runtime bytecode compatibility -->
-    <property name="javassist.jar" value="${base.dir}/javassist.jar" />
+    <!-- javassist upgrade for SBB deploy-time codegen (optimizejainsleep2.md) -->
+    <property name="javassist.version" value="3.31.0-GA" />
+    <property name="javassist.patch.jar" value="${m2.repo}/org/javassist/javassist/${javassist.version}/javassist-${javassist.version}.jar" />
 
     <!-- jandex upgrade for module-info.class support (Java 9+ JARs in WAR deployments) -->
     <property name="jandex.patch.jar" value="${m2.repo}/org/jboss/jandex/2.2.3.Final/jandex-2.2.3.Final.jar" />
@@ -41,7 +42,7 @@
     <!-- Dependency versions from local -->
     <property name="restcomm-jss7.version" value="9.2.12" />
     <property name="restcomm-map-ra.version" value="9.2.12" />
-    <property name="restcomm-slee.http.version" value="7.0.0-SNAPSHOT" />
+    <property name="restcomm-slee.http.version" value="7.0.0" />
     <property name="restcomm-slee.jdbc.version" value="7.0.0-SNAPSHOT" />
     <property name="restcomm-slee.sip.version" value="7.0.0-SNAPSHOT" />
 
@@ -68,9 +69,9 @@
         </delete>
     </target>
 
-    <target name="release" depends="clean,extract-wildfly,patch-jandex,overlay-standalone,clean-up-distro,build-ussd,copy-ussd,build-docs,copy-docs,make-final-zip,bundle-documentation" />
-    <target name="release-no-docs" depends="clean,extract-wildfly,patch-jandex,overlay-standalone,clean-up-distro,build-ussd,copy-ussd,make-final-zip" />
-    <target name="release-no-clean" depends="extract-wildfly,patch-jandex,overlay-standalone,clean-up-distro,build-ussd,copy-ussd,build-docs,copy-docs,make-final-zip,bundle-documentation" />
+    <target name="release" depends="clean,extract-wildfly,patch-jandex,patch-javassist,overlay-standalone,clean-up-distro,build-ussd,copy-ussd,build-docs,copy-docs,make-final-zip,bundle-documentation" />
+    <target name="release-no-docs" depends="clean,extract-wildfly,patch-jandex,patch-javassist,overlay-standalone,clean-up-distro,build-ussd,copy-ussd,make-final-zip" />
+    <target name="release-no-clean" depends="extract-wildfly,patch-jandex,patch-javassist,overlay-standalone,clean-up-distro,build-ussd,copy-ussd,build-docs,copy-docs,make-final-zip,bundle-documentation" />
 
     <target name="deploy">
         <ant antfile="${ant.file.restcomm.ussdgw.release}" target="release">
@@ -103,6 +104,16 @@
         <copy file="${jandex.patch.jar}" todir="${jandex.module.dir}" overwrite="true" failonerror="true" />
         <replace file="${jandex.module.dir}/module.xml" token="jandex-2.0.1.Final.jar" value="jandex-2.2.3.Final.jar" />
         <delete file="${jandex.module.dir}/jandex-2.0.1.Final.jar" failonerror="false" />
+    </target>
+
+    <!-- Upgrade org.javassist WildFly module for JAIN SLEE SBB bytecode generation -->
+    <target name="patch-javassist">
+        <echo>Patching org.javassist to ${javassist.version}</echo>
+        <property name="javassist.module.dir" value="${jboss.modules.path}/org/javassist/main" />
+        <copy file="${javassist.patch.jar}" todir="${javassist.module.dir}" overwrite="true" failonerror="true" />
+        <replace file="${javassist.module.dir}/module.xml" token="javassist-3.18.1-GA.jar" value="javassist-${javassist.version}.jar" />
+        <delete file="${javassist.module.dir}/javassist-3.18.1-GA.jar" failonerror="false" />
+        <copy file="${javassist.patch.jar}" todir="${jboss.home}/lib" overwrite="true" failonerror="false" />
     </target>
 
     <!-- Overlay complete standalone/ from SIP Servlets distro (handles buggy Ant unzip) -->
@@ -261,9 +272,6 @@
         <!-- deploy: JDBC RA DU from Maven local repo (newest 7.2.0-113) -->
         <echo>Copy RestComm JDBC RA DU from local .m2</echo>
         <copy file="${m2.repo}/org/restcomm/resources/restcomm-slee-ra-jdbc-DU/${restcomm-slee.jdbc.version}/restcomm-slee-ra-jdbc-DU-${restcomm-slee.jdbc.version}.jar" todir="${deploy.dir}" failonerror="true" />
-
-        <!-- Copy javassist to wildfly/lib for Java 8/11 bytecode compatibility -->
-        <copy file="${javassist.jar}" todir="${jboss.home}/lib" overwrite="true" failonerror="false" />
 
         <!-- deploy: jSS7 OAM UI from local workspace -->
         <copy todir="${deploy.dir}" failonerror="true">
