@@ -197,45 +197,8 @@ public class XmlMAPDialog implements MAPDialog {
 	private FastList<Long> processInvokeWithoutAnswerIds = new FastList<>();
 
 	@JsonIgnore
-	@JacksonXmlElementWrapper(useWrapping = false)
 	private FastList<MAPMessage> mapMessages = new FastList<>();
 	
-	/**
-	 * Custom serializer for mapMessages to produce javolution-compatible XML format.
-	 * Uses ToXmlGenerator to force element name from @JacksonXmlRootElement of each
-	 * implementation class.
-	 */
-	public static class MAPMessageListSerializer extends JsonSerializer<FastList<MAPMessage>> {
-		@Override
-		public void serialize(FastList<MAPMessage> value, JsonGenerator gen, SerializerProvider serializers) throws java.io.IOException {
-			for (int i = 0; i < value.size(); i++) {
-				MAPMessage msg = value.get(i);
-				String elementName = resolveElementName(msg.getClass());
-				if (gen instanceof com.fasterxml.jackson.dataformat.xml.ser.ToXmlGenerator) {
-					com.fasterxml.jackson.dataformat.xml.ser.ToXmlGenerator xmlGen = (com.fasterxml.jackson.dataformat.xml.ser.ToXmlGenerator) gen;
-					javax.xml.namespace.QName qname = new javax.xml.namespace.QName(elementName);
-					xmlGen.startWrappedValue(null, qname);
-					gen.writeObject(msg);
-					xmlGen.finishWrappedValue(null, qname);
-				} else {
-					gen.writeObjectField(elementName, msg);
-				}
-			}
-		}
-		
-		private String resolveElementName(Class<?> clazz) {
-			JacksonXmlRootElement ann = clazz.getAnnotation(JacksonXmlRootElement.class);
-			if (ann != null && ann.localName() != null && !ann.localName().isEmpty()) {
-				return ann.localName();
-			}
-			JsonTypeName jtn = clazz.getAnnotation(JsonTypeName.class);
-			if (jtn != null && !jtn.value().isEmpty()) {
-				return jtn.value();
-			}
-			return clazz.getSimpleName();
-		}
-	}
-
     @JsonProperty("errComponents")
     private ErrorComponentMap errorComponents = new ErrorComponentMap();
     @JsonProperty("rejectComponents")
@@ -537,9 +500,7 @@ public class XmlMAPDialog implements MAPDialog {
 		return this.mapMessages.remove(mapMessage);
 	}
 
-	@JsonProperty("mapMessages")
-	@JacksonXmlElementWrapper(useWrapping = false)
-	@JsonSerialize(using = MAPMessageListSerializer.class)
+	@JsonIgnore
 	public FastList<MAPMessage> getMAPMessages() {
 		if (this.mapMessages == null) {
 			this.mapMessages = new FastList<>();

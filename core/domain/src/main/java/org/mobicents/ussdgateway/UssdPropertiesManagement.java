@@ -61,6 +61,14 @@ public class UssdPropertiesManagement implements UssdPropertiesManagementMBean {
     protected static final String MAX_ACTIVITY_COUNT = "maxactivitycount";
     protected static final String CDR_SEPARATOR = "cdrSeparator";
 
+    // Virtual Session Bridge configuration
+    protected static final String SESSION_BRIDGE_ENABLED = "sessionbridgeenabled";
+    protected static final String ASYNC_GATE_TIMEOUT_MS = "asyncgatetimeoutms";
+    protected static final String ASYNC_WAIT_USER_MESSAGE = "asyncwaitusermessage";
+    protected static final String ASYNC_HARD_FAIL_MESSAGE = "asynchardfailmessage";
+    protected static final String BRIDGE_STATE_TTL_SEC = "bridgestatettlsec";
+    protected static final String PUSH_RETRY_DELAYS_MS = "pushretrydelaysms";
+
     private static final String PERSIST_FILE_NAME = "ussdproperties.xml";
 
     private static UssdPropertiesManagement instance;
@@ -99,10 +107,22 @@ public class UssdPropertiesManagement implements UssdPropertiesManagementMBean {
 
     private String hrHlrGt = null;
 
-    private CdrLoggedType cdrLoggingTo = CdrLoggedType.Textfile;
+    private CdrLoggedType cdrLoggingTo = CdrLoggedType.LocalRa;
     private String cdrSeparator = ":";
 
     private int maxActivityCount = 5000;
+
+    // ----- Virtual Session Bridge -----
+    /** Master feature flag. When false the gateway behaves exactly as before (no bridge). */
+    private boolean sessionBridgeEnabled = false;
+    /** Release the MO dialogue before the network timeout. Must be &lt; dialogTimeout. */
+    private long asyncGateTimeoutMs = 7000;
+    private String asyncWaitUserMessage = "Hệ thống đang bận, sẽ update lại cho bạn ngay";
+    private String asyncHardFailMessage = "Hệ thống đang có nhiều người sử dụng, vui lòng dùng lại sau";
+    /** Infinispan TTL for bridged session state, in seconds. */
+    private int bridgeStateTtlSec = 180;
+    /** Comma-separated push retry back-off in milliseconds. */
+    private String pushRetryDelaysMs = "3000,8000,15000";
 
     private UssdPropertiesManagement(String name) {
         this.name = name;
@@ -271,7 +291,17 @@ public class UssdPropertiesManagement implements UssdPropertiesManagementMBean {
     }
 
     public CdrLoggedType getCdrLoggingTo() {
-        return cdrLoggingTo;
+        return normalizeCdrLoggingTo(cdrLoggingTo);
+    }
+
+    private static CdrLoggedType normalizeCdrLoggingTo(CdrLoggedType type) {
+        if (type == null) {
+            return CdrLoggedType.LocalRa;
+        }
+        if (type == CdrLoggedType.Textfile || type == CdrLoggedType.Database) {
+            return CdrLoggedType.LocalRa;
+        }
+        return type;
     }
 
     public String getCdrLoggingToStr() {
@@ -313,6 +343,106 @@ public class UssdPropertiesManagement implements UssdPropertiesManagementMBean {
     public void setMaxActivityCount(int maxActivityCount) {
         this.maxActivityCount = maxActivityCount;
         this.store();
+    }
+
+    // ----- Virtual Session Bridge accessors -----
+
+    @Override
+    public boolean isSessionBridgeEnabled() {
+        return sessionBridgeEnabled;
+    }
+
+    @Override
+    public void setSessionBridgeEnabled(boolean sessionBridgeEnabled) {
+        this.sessionBridgeEnabled = sessionBridgeEnabled;
+        this.store();
+    }
+
+    @Override
+    public long getAsyncGateTimeoutMs() {
+        return asyncGateTimeoutMs;
+    }
+
+    @Override
+    public void setAsyncGateTimeoutMs(long asyncGateTimeoutMs) {
+        this.asyncGateTimeoutMs = asyncGateTimeoutMs;
+        this.store();
+    }
+
+    @Override
+    public String getAsyncWaitUserMessage() {
+        return asyncWaitUserMessage;
+    }
+
+    @Override
+    public void setAsyncWaitUserMessage(String asyncWaitUserMessage) {
+        this.asyncWaitUserMessage = asyncWaitUserMessage;
+        this.store();
+    }
+
+    @Override
+    public String getAsyncHardFailMessage() {
+        return asyncHardFailMessage;
+    }
+
+    @Override
+    public void setAsyncHardFailMessage(String asyncHardFailMessage) {
+        this.asyncHardFailMessage = asyncHardFailMessage;
+        this.store();
+    }
+
+    @Override
+    public int getBridgeStateTtlSec() {
+        return bridgeStateTtlSec;
+    }
+
+    @Override
+    public void setBridgeStateTtlSec(int bridgeStateTtlSec) {
+        this.bridgeStateTtlSec = bridgeStateTtlSec;
+        this.store();
+    }
+
+    @Override
+    public String getPushRetryDelaysMs() {
+        return pushRetryDelaysMs;
+    }
+
+    @Override
+    public void setPushRetryDelaysMs(String pushRetryDelaysMs) {
+        this.pushRetryDelaysMs = pushRetryDelaysMs;
+        this.store();
+    }
+
+    /**
+     * Parses {@link #pushRetryDelaysMs} into a {@code long[]} of back-off delays. Falls back to
+     * {@code 3000,8000,15000} if the configured value is missing or malformed.
+     */
+    public long[] getPushRetryDelaysMsArray() {
+        long[] fallback = new long[] { 3000L, 8000L, 15000L };
+        if (pushRetryDelaysMs == null || pushRetryDelaysMs.trim().isEmpty()) {
+            return fallback;
+        }
+        String[] parts = pushRetryDelaysMs.split(",");
+        java.util.List<Long> values = new ArrayList<>(parts.length);
+        for (String part : parts) {
+            String trimmed = part.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            try {
+                values.add(Long.parseLong(trimmed));
+            } catch (NumberFormatException e) {
+                logger.warn("Ignoring invalid pushRetryDelaysMs entry: " + trimmed);
+            }
+        }
+        if (values.isEmpty()) {
+            return fallback;
+        }
+        long[] result = new long[values.size()];
+        for (int i = 0; i < values.size(); i++) {
+            result[i] = values.get(i);
+        }
+        return result;
     }
 
     public void start() throws Exception {
@@ -363,6 +493,12 @@ public class UssdPropertiesManagement implements UssdPropertiesManagementMBean {
             properties.put(CDR_LOGGING_TO, this.cdrLoggingTo.toString());
             properties.put(CDR_SEPARATOR, this.cdrSeparator);
             properties.put(MAX_ACTIVITY_COUNT, this.maxActivityCount);
+            properties.put(SESSION_BRIDGE_ENABLED, this.sessionBridgeEnabled);
+            properties.put(ASYNC_GATE_TIMEOUT_MS, this.asyncGateTimeoutMs);
+            properties.put(ASYNC_WAIT_USER_MESSAGE, this.asyncWaitUserMessage);
+            properties.put(ASYNC_HARD_FAIL_MESSAGE, this.asyncHardFailMessage);
+            properties.put(BRIDGE_STATE_TTL_SEC, this.bridgeStateTtlSec);
+            properties.put(PUSH_RETRY_DELAYS_MS, this.pushRetryDelaysMs);
 
             if (networkIdVsUssdGwGt.size() > 0) {
                 ArrayList<UssdGwGtNetworkIdElement> al = new ArrayList<>();
@@ -402,17 +538,17 @@ public class UssdPropertiesManagement implements UssdPropertiesManagementMBean {
             fis.close();
 
             String xml = new String(data, "UTF-8");
+            xml = LegacyXmlConfigAdapter.normalizeUssdPropertiesXml(xml);
 
             HashMap<String, Object> properties = xmlMapper.readValue(xml, HashMap.class);
 
             if (properties != null) {
                 if (properties.containsKey(USSD_GT_LIST)) {
-                    ArrayList<UssdGwGtNetworkIdElement> al = (ArrayList<UssdGwGtNetworkIdElement>) properties.get(USSD_GT_LIST);
+                    java.util.List<UssdGwGtNetworkIdElement> al =
+                            LegacyXmlConfigAdapter.parseUssdGtList(properties.get(USSD_GT_LIST));
                     networkIdVsUssdGwGt.clear();
-                    if (al != null) {
-                        for (UssdGwGtNetworkIdElement elem : al) {
-                            networkIdVsUssdGwGt.put(elem.networkId, elem.ussdGwGt);
-                        }
+                    for (UssdGwGtNetworkIdElement elem : al) {
+                        networkIdVsUssdGwGt.put(elem.networkId, elem.ussdGwGt);
                     }
                 }
 
@@ -472,6 +608,30 @@ public class UssdPropertiesManagement implements UssdPropertiesManagementMBean {
                 o = properties.get(MAX_MAP_VERSION);
                 if (o != null)
                     this.maxMapVersion = (o instanceof Number) ? ((Number) o).intValue() : Integer.parseInt(o.toString());
+
+                o = properties.get(SESSION_BRIDGE_ENABLED);
+                if (o != null)
+                    this.sessionBridgeEnabled = (o instanceof Boolean) ? (Boolean) o : Boolean.parseBoolean(o.toString());
+
+                o = properties.get(ASYNC_GATE_TIMEOUT_MS);
+                if (o != null)
+                    this.asyncGateTimeoutMs = (o instanceof Number) ? ((Number) o).longValue() : Long.parseLong(o.toString());
+
+                s1 = (String) properties.get(ASYNC_WAIT_USER_MESSAGE);
+                if (s1 != null)
+                    this.asyncWaitUserMessage = s1;
+
+                s1 = (String) properties.get(ASYNC_HARD_FAIL_MESSAGE);
+                if (s1 != null)
+                    this.asyncHardFailMessage = s1;
+
+                o = properties.get(BRIDGE_STATE_TTL_SEC);
+                if (o != null)
+                    this.bridgeStateTtlSec = (o instanceof Number) ? ((Number) o).intValue() : Integer.parseInt(o.toString());
+
+                o = properties.get(PUSH_RETRY_DELAYS_MS);
+                if (o != null)
+                    this.pushRetryDelaysMs = o.toString();
             }
         } catch (FileNotFoundException e) {
             logger.info("No persisted properties file found at " + persistFile + ". Using defaults.");
@@ -489,6 +649,10 @@ public class UssdPropertiesManagement implements UssdPropertiesManagementMBean {
     }
 
     public enum CdrLoggedType {
-        Database, Textfile,
+        /** @deprecated Legacy config value; treated as {@link #LocalRa}. */
+        Database,
+        /** @deprecated Legacy config value; treated as {@link #LocalRa}. */
+        Textfile,
+        LocalRa,
     }
 }

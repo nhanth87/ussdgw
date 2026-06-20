@@ -23,7 +23,30 @@
 		<properties>
 			<property name="mapJndi" type="java.lang.String" value="java:/restcomm/ss7/map" />
 			<property name="flatIndexEnabled" type="java.lang.Boolean" value="true" />
+			<property name="m3uaByteBufEnabled" type="java.lang.Boolean" value="true" />
+			<property name="sccpByteBufEnabled" type="java.lang.Boolean" value="true" />
+			<property name="nettyEncodeEnabled" type="java.lang.Boolean" value="true" />
 		</properties>
 		<ra-link name="MAPRA" />
+	</ra-entity>
+	<ra-entity
+		resource-adaptor-id="ResourceAdaptorID[name=CdrLocalResourceAdaptor,vendor=org.mobicents.ussd,version=1.0]"
+		entity-name="CdrLocalRA">
+		<properties>
+			<property name="QUEUE_CAPACITY" type="java.lang.Integer" value="65536" />
+			<property name="BATCH_SIZE" type="java.lang.Integer" value="500" />
+			<property name="FLUSH_INTERVAL_MS" type="java.lang.Integer" value="100" />
+			<property name="CDR_LOG_DIR" type="java.lang.String" value="" />
+			<property name="CDR_FILE_PREFIX" type="java.lang.String" value="cdr" />
+		</properties>
+		<ra-link name="CdrLocalRA" />
+	</ra-entity>
+	<ra-entity
+		resource-adaptor-id="ResourceAdaptorID[name=GrpcAsResourceAdaptor,vendor=org.mobicents.ussd,version=1.0]"
+		entity-name="GrpcAsRA">
+		<properties>
+			<property name="GRPC_DEADLINE_MS" type="java.lang.Long" value="30000" />
+		</properties>
+		<ra-link name="GrpcAsRA" />
 	</ra-entity>
 </deploy-config>

@@ -229,6 +229,33 @@ public abstract class HttpServerSbb extends ChildServerSbb implements SriParent 
 
 			this.setMsisdnCMP(msisdn);
 
+			// Virtual Session Bridge: an inbound push carrying a request id is the AS async
+			// callback (S2) for a previously bridged MO interaction. Apply idempotency and an
+			// active-session priority check before pushing.
+			org.mobicents.ussdgateway.slee.SessionBridgeSupport bridge =
+					org.mobicents.ussdgateway.slee.SessionBridgeSupport.getInstance();
+			String bridgeCorrelationId = null;
+			if (bridge.isEnabled()) {
+				String requestId = event.getRequest().getHeader("X-Ussd-Request-Id");
+				if (requestId != null) {
+					org.mobicents.ussdgateway.bridge.VirtualSession vs = bridge.onAsyncCallback(requestId);
+					if (vs == null) {
+						// duplicate / unknown / expired callback: acknowledge without pushing again
+						ackHttpCallback();
+						success = true;
+						return;
+					}
+					if (!bridge.shouldDeliverNow(vs)) {
+						// a higher-priority MO session is active: queue the push back
+						bridge.enqueuePushRetry(vs.getCorrelationId(), vs.getMsisdn(), serviceCode);
+						ackHttpCallback();
+						success = true;
+						return;
+					}
+					bridgeCorrelationId = vs.getCorrelationId();
+				}
+			}
+
 			if (logger.isFinestEnabled())
 				logger.finest("Creating session activity.");
 
@@ -261,11 +288,13 @@ public abstract class HttpServerSbb extends ChildServerSbb implements SriParent 
                 state.init(null, serviceCode, null, null, msisdn, null, null);
                 state.setDialogStartTime(DateTime.now());
                 state.setUssdType(USSDType.PUSH);
+                if (bridgeCorrelationId != null) {
+                    state.setCorrelationId(bridgeCorrelationId);
+                    state.setBridgePhase(org.mobicents.ussdgateway.bridge.BridgePhase.S2_PUSH.name());
+                }
                 cdrInterface.setState(state);
 
-                // attach, in case impl wants to use more of dialog.
-                SbbLocalObject sbbLO = (SbbLocalObject) cdrInterface;
-                aci.attach(sbbLO);
+                attachCdrToActivity(aci, cdrInterface);
             }
 
             getSRI().performSRIQuery(msisdn.getAddress(), xmlMAPDialog);
@@ -928,6 +957,19 @@ public abstract class HttpServerSbb extends ChildServerSbb implements SriParent 
             super.ussdStatAggregator.updateDialogsAllFailed();
             super.ussdStatAggregator.updateDialogsPushFailed();
             super.ussdStatAggregator.updateDialogsHttpFailed();
+
+            // Virtual Session Bridge: a failed NI push for a bridged result enters the back-off
+            // retry queue; exhausting the retries triggers the notification fallback (SMS later).
+            org.mobicents.ussdgateway.slee.SessionBridgeSupport bridge =
+                    org.mobicents.ussdgateway.slee.SessionBridgeSupport.getInstance();
+            if (bridge.isEnabled()) {
+                String correlationId = state.getCorrelationId();
+                if (correlationId != null) {
+                    bridge.enqueuePushRetry(correlationId,
+                            getMsisdnCMP() != null ? getMsisdnCMP().getAddress() : null,
+                            state.getUssdString());
+                }
+            }
 		}
 	}
 
@@ -980,6 +1022,7 @@ public abstract class HttpServerSbb extends ChildServerSbb implements SriParent 
 			this.sccpParameterFact = new ParameterFactoryImpl();
 
 			this.timerFacility = this.sbbContext.getTimerFacility();
+			initCdrLocalProvider();
 		} catch (Exception ne) {
 			if (logger.isSevereEnabled())
 				super.logger.severe("Could not set SBB context:", ne);
@@ -1227,6 +1270,21 @@ public abstract class HttpServerSbb extends ChildServerSbb implements SriParent 
         HttpSessionActivity httpSessionActivity = this.getHttpSessionActivity();
         if (httpSessionActivity != null) {
             httpSessionActivity.endActivity();
+        }
+    }
+
+    /** Acknowledge an AS async callback (duplicate or queued-back) with HTTP 200, no push. */
+    private void ackHttpCallback() {
+        EventContext httpEventContext = this.resumeHttpEventContext();
+        if (httpEventContext != null) {
+            HttpServletRequestEvent httpRequest = (HttpServletRequestEvent) httpEventContext.getEvent();
+            HttpServletResponse response = httpRequest.getResponse();
+            response.setStatus(HttpServletResponse.SC_OK);
+            try {
+                response.flushBuffer();
+            } catch (IOException ioe) {
+                logger.severe("Failed to flush HTTP callback ack", ioe);
+            }
         }
     }
 

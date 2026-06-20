@@ -13,6 +13,7 @@
 
 	<modules>
 		<module>library</module>
+		<module>resources</module>
 		<module>sbbs</module>
 		<module>services-du</module>
 	</modules>

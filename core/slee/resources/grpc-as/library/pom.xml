@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.mobicents.ussd</groupId>
+        <artifactId>ussd-grpc-as-ra</artifactId>
+        <version>7.2.1-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>ussd-grpc-as-ra-library</artifactId>
+    <name>Core : SLEE : gRPC AS RA : Library</name>
+
+    <dependencies>
+        <dependency>
+            <groupId>javax.slee</groupId>
+            <artifactId>jain-slee</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testng</groupId>
+            <artifactId>testng</artifactId>
+            <version>${testng.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.mobicents.tools</groupId>
+                <artifactId>maven-library-plugin</artifactId>
+                <version>1.0.0.FINAL</version>
+                <configuration>
+                    <library-name>ussd-grpc-as-ra-library</library-name>
+                    <library-vendor>org.mobicents.ussd</library-vendor>
+                    <library-version>1.0</library-version>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                            <goal>generate-descriptor</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

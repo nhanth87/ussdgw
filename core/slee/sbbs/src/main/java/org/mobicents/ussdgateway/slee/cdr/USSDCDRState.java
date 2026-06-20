@@ -71,6 +71,12 @@ public class USSDCDRState implements Serializable {
 
     protected String ussdString;
 
+    /** Links the CDR records of a bridged transaction (S1 MO and S2 NI push). */
+    protected String correlationId;
+
+    /** Which bridge dialogue this record belongs to: NONE | S1_RELEASED | S2_PUSH | MERGED. */
+    protected String bridgePhase;
+
 	/**
 	 * @return the destReference
 	 */
@@ -333,6 +339,22 @@ public class USSDCDRState implements Serializable {
 
     public void setUssdString(String ussdString) {
         this.ussdString = ussdString;
+    }
+
+    public String getCorrelationId() {
+        return this.correlationId;
+    }
+
+    public void setCorrelationId(String correlationId) {
+        this.correlationId = correlationId;
+    }
+
+    public String getBridgePhase() {
+        return this.bridgePhase;
+    }
+
+    public void setBridgePhase(String bridgePhase) {
+        this.bridgePhase = bridgePhase;
     }
 
 	/*

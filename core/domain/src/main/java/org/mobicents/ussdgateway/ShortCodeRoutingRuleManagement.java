@@ -295,19 +295,8 @@ public class ShortCodeRoutingRuleManagement implements ShortCodeRoutingRuleManag
 
             String xml = new String(data, "UTF-8");
 
-            // Remove root wrapper if present (skip XML declaration)
-            String content = xml;
-            if (content.startsWith("<?xml")) {
-                int declEnd = content.indexOf("?>");
-                if (declEnd >= 0) {
-                    content = content.substring(declEnd + 2);
-                }
-            }
-            int startIdx = content.indexOf(">");
-            int endIdx = content.lastIndexOf("<");
-            if (startIdx >= 0 && endIdx > startIdx) {
-                content = content.substring(startIdx + 1, endIdx);
-            }
+            String content = LegacyXmlConfigAdapter.unwrapSingleRootElement(xml);
+            content = LegacyXmlConfigAdapter.normalizeScRoutingRuleListContent(content);
 
             this.scRoutingRuleList = xmlMapper.readValue(content,
                     xmlMapper.getTypeFactory().constructCollectionType(ArrayList.class, ScRoutingRule.class));

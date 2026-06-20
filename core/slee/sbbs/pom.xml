@@ -50,10 +50,15 @@
                 </exclusion>
             </exclusions>
         </dependency>
-		<dependency>
-		    <artifactId>restcomm-slee-ra-jdbc-ratype</artifactId>
-		    <groupId>org.restcomm.resources</groupId>
-		    <version>${restcomm.resources.jdbc.version}</version>
+       	<dependency>
+       	    <groupId>${project.groupId}</groupId>
+       	    <artifactId>ussd-cdr-local-ra-ratype</artifactId>
+       	    <version>${project.version}</version>
+       	</dependency>
+       	<dependency>
+       	    <groupId>${project.groupId}</groupId>
+       	    <artifactId>ussd-grpc-as-ra-library</artifactId>
+       	    <version>${project.version}</version>
        	</dependency>
         <dependency>
             <groupId>org.mobicents.resources</groupId>
@@ -101,10 +106,10 @@
 			<artifactId>joda-time</artifactId>
 			<version>${jodatime.version}</version>
 		</dependency>
-		<!-- Cassandra Session Repository for 100k concurrent sessions -->
+		<!-- Virtual Session Bridge: FSM, Infinispan store, push retry, fallback -->
 		<dependency>
 			<groupId>${project.groupId}</groupId>
-			<artifactId>xc7</artifactId>
+			<artifactId>session-bridge</artifactId>
 			<version>${project.version}</version>
 		</dependency>
     </dependencies>

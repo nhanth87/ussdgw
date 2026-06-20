@@ -332,7 +332,7 @@ ussdgateway/
 ├── core/                          # Core modules
 │   ├── domain/                    # Domain model & entities
 │   ├── xml/                       # XML serialization (Jackson)
-│   ├── xc7/                       # XC7 integration
+│   ├── session-bridge/           # Virtual Session Bridge (FSM, Infinispan store)
 │   ├── slee/                      # JAIN SLEE SBBs
 │   │   ├── library/               # SBB library
 │   │   ├── sbbs/                  # Service Building Blocks
@@ -456,6 +456,89 @@ This project is licensed under the GNU Affero General Public License v3.0 (AGPL-
 - **JCTools** — Lock-free concurrent collections
 - **Netty Project** — High-performance network framework
 - **3GPP** — SS7 / MAP / USSD specifications
+
+---
+
+## 🔀 Virtual Session Bridge (async AS reconciliation)
+
+When an Application Server takes longer than the network USSD timer allows, the session is normally
+dropped. The **Virtual Session Bridge** turns the gateway into a session orchestration layer that
+recovers these slow transactions and raises the session success rate.
+
+How it works (feature-flagged, `sessionBridgeEnabled`, default `false`):
+
+1. On a Mobile-Originated (pull) request the gateway tracks the interaction with a gateway-owned
+   `correlationId` and persists state to **Infinispan** (`cache-container "ussd"`).
+2. If the AS does not reply before the **async gate timeout**, the gateway releases the MO dialogue
+   early with a friendly message ("Hệ thống đang bận, sẽ update lại cho bạn ngay") and writes CDR
+   record **S1** (`bridgePhase=S1_RELEASED`).
+3. When the late AS reply arrives it is delivered as a **Network-Initiated push** (S2). Both CDR
+   records share the same `correlationId` so reporting counts one successful transaction.
+4. Idempotency lock per MSISDN, active-session priority/queue-back, push retry queue (JCTools) and a
+   `NotificationFallback` SPI (SMS hook) protect against double submits and undeliverable pushes.
+5. **Adaptive timeout** keeps a per-operator EWMA of AS latency and shortens/lengthens the gate
+   within the configured ceiling.
+
+Configuration (MBean `UssdPropertiesManagement`, editable in the **Server Settings → Session
+Bridge** tab of `ussd-management`):
+
+| Property | Meaning | Default |
+|----------|---------|---------|
+| `sessionBridgeEnabled` | master feature flag | `false` |
+| `asyncGateTimeoutMs` | release MO dialogue before network timeout | `7000` |
+| `asyncWaitUserMessage` | message shown while bridging | VN string |
+| `asyncHardFailMessage` | message shown on AS hard-fail / overload | VN string |
+| `bridgeStateTtlSec` | Infinispan TTL | `180` |
+| `pushRetryDelaysMs` | push retry back-off | `3000,8000,15000` |
+
+Design spec (Vietnamese, with FSM + sequence diagrams + scenario catalog P1–P15 / U1–U10 / H7–H9):
+[`docs/design/virtual-session-bridge.md`](docs/design/virtual-session-bridge.md).
+
+### sessionId vs correlationId — one id is enough
+
+The AS only needs **one** stable identifier. In the bridged case the MO (S1) and NI push (S2)
+dialogues are different network dialogues but the same business session, so the gateway keeps the
+id stable (`sessionId := correlationId`) across S1→S2. Internally the gateway uses `correlationId`
+as the Infinispan/CDR key; on the wire there is a single id. See section 12 of the design doc.
+
+## 📡 gRPC Application Server integration
+
+In addition to HTTP, the gateway can talk to the AS over **gRPC (HTTP/2)** — the gateway is the
+gRPC client, the AS is the gRPC server, mirroring the HTTP client RA.
+
+- Routing: set `ScRoutingRuleType.GRPC` on the routing rule; `ruleUrl` = `host:port` of the AS.
+- The gRPC RA (`core/slee/resources/grpc-as`) is non-blocking and publishes the reply to a
+  `GrpcResponseRegistry`; `GrpcClientSbb` collects it on a short SLEE poll timer and drives the MAP
+  dialogue — the same `XmlMAPDialog` payload as HTTP.
+- The session id (unified with the bridge correlation id) is sent to the AS so it can keep
+  per-session menu state, exactly like the HTTP session id.
+- Wire format: unary method `ussd.UssdApplicationService/Process` carrying a JSON envelope
+  (`sessionId`, `correlationId`, `push`, `networkId`, `payloadB64`). No protobuf code generation is
+  required on the Java side; swap the marshaller if you prefer protobuf.
+
+Deploy: the `ussd-grpc-as-ra-DU` is copied by `release-wildfly/build.xml` and the `GrpcAsRA` entity
+is activated by the services DU `deploy-config.xml`.
+
+### Python gRPC AS test app
+
+[`tools/grpc-as-tester`](tools/grpc-as-tester) ships a configurable test AS and a load generator:
+
+```bash
+cd tools/grpc-as-tester
+python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
+
+# multi-menu USSD AS with adaptive (random 1-100ms) processing delay
+./.venv/bin/python ussd_as_server.py --port 8443 --min-delay 1 --max-delay 100 \
+    --menu-config menu_config.json
+
+# load test from 1,000 up to 100,000+ TPS (fan out across processes for high TPS)
+./.venv/bin/python loadtest_client.py --target localhost:8443 --tps 1000   --duration 10
+./.venv/bin/python loadtest_client.py --target localhost:8443 --tps 100000 --duration 20 --processes 8
+```
+
+The AS implements a configurable multi-menu pull/push flow, applies the adaptive delay to exercise
+the bridge + adaptive timeout, and keeps per-session menu state keyed by the (unified) session id.
+The load client reports achieved TPS and p50/p95/p99 latency.
 
 ---
 

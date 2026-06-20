@@ -186,6 +186,7 @@ public abstract class SipServerSbb extends ChildServerSbb implements SriParent {
             this.sccpParameterFact = new ParameterFactoryImpl();
 
             this.timerFacility = this.sbbContext.getTimerFacility();
+            initCdrLocalProvider();
 		} catch (Exception ne) {
 			logger.severe("Could not set SBB context:", ne);
 		}
@@ -598,9 +599,7 @@ public abstract class SipServerSbb extends ChildServerSbb implements SriParent {
                     state.setUssdType(USSDType.PUSH);
                     cdrInterface.setState(state);
 
-                    // attach, in case impl wants to use more of dialog.
-                    SbbLocalObject sbbLO = (SbbLocalObject) cdrInterface;
-                    aci.attach(sbbLO);
+                    attachCdrToActivity(aci, cdrInterface);
                 }
 
                 super.ussdStatAggregator.addDialogsInProcess();

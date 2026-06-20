@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!DOCTYPE resource-adaptor-jar PUBLIC "-//Sun Microsystems, Inc.//DTD JAIN SLEE Resource Adaptor 1.1//EN" "http://java.sun.com/dtd/slee-resource-adaptor-jar_1_1.dtd">
+
+<resource-adaptor-jar>
+
+    <resource-adaptor ignore-ra-type-event-type-check="True">
+
+        <resource-adaptor-name>CdrLocalResourceAdaptor</resource-adaptor-name>
+        <resource-adaptor-vendor>org.mobicents.ussd</resource-adaptor-vendor>
+        <resource-adaptor-version>1.0</resource-adaptor-version>
+
+        <resource-adaptor-type-ref>
+            <resource-adaptor-type-name>CdrLocalResourceAdaptorType</resource-adaptor-type-name>
+            <resource-adaptor-type-vendor>org.mobicents.ussd</resource-adaptor-type-vendor>
+            <resource-adaptor-type-version>1.0</resource-adaptor-type-version>
+        </resource-adaptor-type-ref>
+
+        <resource-adaptor-classes>
+            <resource-adaptor-class>
+                <resource-adaptor-class-name>
+                    org.mobicents.ussd.cdr.local.ra.CdrLocalResourceAdaptor
+                </resource-adaptor-class-name>
+            </resource-adaptor-class>
+        </resource-adaptor-classes>
+
+        <config-property>
+            <config-property-name>QUEUE_CAPACITY</config-property-name>
+            <config-property-type>java.lang.Integer</config-property-type>
+            <config-property-value>65536</config-property-value>
+        </config-property>
+
+        <config-property>
+            <config-property-name>BATCH_SIZE</config-property-name>
+            <config-property-type>java.lang.Integer</config-property-type>
+            <config-property-value>500</config-property-value>
+        </config-property>
+
+        <config-property>
+            <config-property-name>FLUSH_INTERVAL_MS</config-property-name>
+            <config-property-type>java.lang.Integer</config-property-type>
+            <config-property-value>100</config-property-value>
+        </config-property>
+
+        <config-property>
+            <config-property-name>CDR_LOG_DIR</config-property-name>
+            <config-property-type>java.lang.String</config-property-type>
+            <config-property-value></config-property-value>
+        </config-property>
+
+        <config-property>
+            <config-property-name>CDR_FILE_PREFIX</config-property-name>
+            <config-property-type>java.lang.String</config-property-type>
+            <config-property-value>cdr</config-property-value>
+        </config-property>
+
+    </resource-adaptor>
+
+</resource-adaptor-jar>

@@ -20,11 +20,8 @@
 package org.mobicents.ussdgateway.slee;
 
 import javax.slee.ActivityContextInterface;
-import javax.slee.CreateException;
 import javax.slee.SLEEException;
 import javax.slee.SbbContext;
-import javax.slee.SbbLocalObject;
-import javax.slee.TransactionRequiredLocalException;
 import javax.slee.facilities.TimerEvent;
 import javax.slee.facilities.TimerFacility;
 import javax.slee.facilities.TimerID;
@@ -47,7 +44,6 @@ import org.restcomm.protocols.ss7.map.api.service.supplementary.UnstructuredSSRe
 import org.restcomm.protocols.ss7.map.datacoding.CBSDataCodingSchemeImpl;
 import org.restcomm.protocols.ss7.map.dialog.MAPUserAbortChoiceImpl;
 import org.restcomm.protocols.ss7.tcap.api.MessageType;
-import org.mobicents.slee.ChildRelationExt;
 import org.restcomm.slee.resource.map.MAPContextInterfaceFactory;
 import org.restcomm.slee.resource.map.events.DialogAccept;
 import org.restcomm.slee.resource.map.events.DialogClose;
@@ -96,6 +92,23 @@ public abstract class ChildSbb extends USSDBaseSbb implements ChildInterface {
 	 * Timer event
 	 */
 	public void onTimerEvent(TimerEvent event, ActivityContextInterface aci) {
+
+		// Protocol-specific timer hook (e.g. gRPC response polling). When it returns true the
+		// timer has been fully handled by the subclass.
+		if (this.onProtocolTimer(aci)) {
+			return;
+		}
+
+		// Virtual Session Bridge: when enabled and this MO interaction is awaiting the AS,
+		// release the dialogue early with a friendly message instead of a hard timeout, then
+		// reconcile the late AS response via an NI push (S2).
+		SessionBridgeSupport bridge = SessionBridgeSupport.getInstance();
+		USSDCDRState bridgeState = getOrCreateLocalRaCdrState();
+		String correlationId = bridgeState.getCorrelationId();
+		if (bridge.isEnabled() && correlationId != null) {
+			this.handleBridgeGateTimeout(bridge, correlationId);
+			return;
+		}
 
 		if (super.logger.isWarningEnabled()) {
 			super.logger.warning(String.format(
@@ -170,9 +183,17 @@ public abstract class ChildSbb extends USSDBaseSbb implements ChildInterface {
 				state.setRemoteDialogId(evt.getMAPDialog().getRemoteDialogId());
 				cdrInterface.setState(state);
 
-				// attach, in case impl wants to use more of dialog.
-				SbbLocalObject sbbLO = (SbbLocalObject) cdrInterface;
-				aci.attach(sbbLO);
+				attachCdrToActivity(aci, cdrInterface);
+
+				// Virtual Session Bridge: start tracking this MO interaction so a slow AS can be
+				// reconciled later via an NI push. No-op when the feature flag is off.
+				SessionBridgeSupport bridge = SessionBridgeSupport.getInstance();
+				if (bridge.isEnabled()) {
+					String msisdn = evt.getMSISDNAddressString() != null
+							? evt.getMSISDNAddressString().getAddress() : null;
+					String correlationId = bridge.beginWaitAs(msisdn, serviceCode, dialog.getLocalDialogId());
+					state.setCorrelationId(correlationId);
+				}
 			}
 			this.sendUssdData(dialog);
 
@@ -579,49 +600,57 @@ public abstract class ChildSbb extends USSDBaseSbb implements ChildInterface {
 
 	protected void createCDRRecord(RecordStatus recordStatus) {
 		try {
-			this.getCDRChargeInterface().createRecord(recordStatus);
+			submitLocalRaCdr(recordStatus);
 		} catch (Exception e) {
 			logger.severe("Error while trying to create CDR Record", e);
 		}
+	}
+
+	/**
+	 * Gate-timer expiry for a bridged MO interaction: notify the user that processing continues,
+	 * release the MO dialogue, mark the virtual session BRIDGED and write the S1 CDR record.
+	 * The late AS response is later delivered through an NI push carrying the same correlation id.
+	 */
+	private void handleBridgeGateTimeout(SessionBridgeSupport bridge, String correlationId) {
+		if (super.logger.isWarningEnabled()) {
+			super.logger.warning(String.format(
+					"Bridging slow AS for PULL case, correlationId=%s MAPDialog=%s", correlationId,
+					this.getMAPDialog()));
+		}
+		try {
+			String waitMessage = bridge.waitUserMessage();
+			if (waitMessage == null || waitMessage.trim().isEmpty()) {
+				waitMessage = this.getUssdPropertiesManagement().getDialogTimeoutErrorMessage();
+			}
+			this.sendErrorMessage(waitMessage);
+
+			if (isSip()) {
+				XmlMAPDialog xmlMAPDialog = this.getXmlMAPDialog();
+				xmlMAPDialog.reset();
+				xmlMAPDialog.setDialogTimedOut(true);
+				xmlMAPDialog.setTCAPMessageType(MessageType.Abort);
+				this.sendUssdData(xmlMAPDialog);
+			}
+		} catch (Exception e) {
+			logger.severe("Error while sending bridge wait message to peer " + e.getMessage(), e);
+		}
+
+		this.terminateProtocolConnection();
+		this.ussdStatAggregator.updateAppTimeouts();
+		this.updateDialogFailureStat();
+
+		bridge.markBridged(correlationId);
+		// CDR S1: dialogue released early; reconciliation continues out of band via the NI push.
+		this.submitBridgeCdr(RecordStatus.FAILED_APP_TIMEOUT, correlationId,
+				org.mobicents.ussdgateway.bridge.BridgePhase.S1_RELEASED.name());
 	}
 
 	// ///////////////////
 	// Charge interface //
 	// ///////////////////
 
-	private static final String CHARGER = "CHARGER";
-
-	public abstract ChildRelationExt getCDRInterfaceChildRelation();
-
-    public abstract ChildRelationExt getCDRPlainInterfaceChildRelation();
-
 	public ChargeInterface getCDRChargeInterface() {
-        UssdPropertiesManagement ussdPropertiesManagement = UssdPropertiesManagement.getInstance();
-        ChildRelationExt childExt;
-        if (ussdPropertiesManagement.getCdrLoggingTo() == UssdPropertiesManagement.CdrLoggedType.Textfile) {
-            childExt = getCDRPlainInterfaceChildRelation();
-        } else {
-            childExt = getCDRInterfaceChildRelation();
-        }
-
-		ChargeInterface child = (ChargeInterface) childExt.get(CHARGER);
-		if (child == null) {
-			try {
-				child = (ChargeInterface) childExt.create(CHARGER);
-			} catch (TransactionRequiredLocalException e) {
-				logger.severe("TransactionRequiredLocalException when creating CDR child", e);
-			} catch (IllegalArgumentException e) {
-				logger.severe("IllegalArgumentException when creating CDR child", e);
-			} catch (NullPointerException e) {
-				logger.severe("NullPointerException when creating CDR child", e);
-			} catch (SLEEException e) {
-				logger.severe("SLEEException when creating CDR child", e);
-			} catch (CreateException e) {
-				logger.severe("CreateException when creating CDR child", e);
-			}
-		}
-
-		return child;
+		return getLocalRaChargeInterface();
 	}
 
 	// /////////////////
@@ -640,6 +669,7 @@ public abstract class ChildSbb extends USSDBaseSbb implements ChildInterface {
 			super.ussdStatAggregator = UssdStatAggregator.getInstance();
 
 			this.timerFacility = this.sbbContext.getTimerFacility();
+			initCdrLocalProvider();
 
 		} catch (Exception ne) {
 			logger.severe("Could not set SBB context:", ne);
@@ -691,78 +721,6 @@ public abstract class ChildSbb extends USSDBaseSbb implements ChildInterface {
 		this.setCall(call);
 	}
 
-//	/*
-//	 * (non-Javadoc)
-//	 * 
-//	 * @see org.mobicents.ussdgateway.slee.cdr.ChargeInterfaceParent#
-//	 * recordGenerationSucessed
-//	 * (org.mobicents.ussdgateway.slee.cdr.ChargeInterfaceParent.RecordType)
-//	 */
-//	@Override
-//	public void recordGenerationSucessed() {
-//		if (this.logger.isFineEnabled()) {
-//			this.logger.fine("Generated CDR for Status: " + getCDRChargeInterface().getState());
-//		}
-//
-//	}
-//
-//	/*
-//	 * (non-Javadoc)
-//	 * 
-//	 * @see org.mobicents.ussdgateway.slee.cdr.ChargeInterfaceParent#
-//	 * recordGenerationFailed(java.lang.String)
-//	 */
-//	@Override
-//	public void recordGenerationFailed(String message) {
-//		if (this.logger.isSevereEnabled()) {
-//			this.logger.severe("Failed to generate CDR! Message: '" + message + "'");
-//			this.logger.severe("Status: " + getCDRChargeInterface().getState());
-//		}
-//	}
-//
-//	/*
-//	 * (non-Javadoc)
-//	 * 
-//	 * @see org.mobicents.ussdgateway.slee.cdr.ChargeInterfaceParent#
-//	 * recordGenerationFailed(java.lang.String, java.lang.Throwable)
-//	 */
-//	@Override
-//	public void recordGenerationFailed(String message, Throwable t) {
-//		if (this.logger.isSevereEnabled()) {
-//			this.logger.severe("Failed to generate CDR! Message: '" + message + "'", t);
-//			this.logger.severe("Status: " + getCDRChargeInterface().getState());
-//		}
-//	}
-//
-//	/*
-//	 * (non-Javadoc)
-//	 * 
-//	 * @see
-//	 * org.mobicents.ussdgateway.slee.cdr.ChargeInterfaceParent#initFailed(java
-//	 * .lang.String, java.lang.Throwable)
-//	 */
-//	@Override
-//	public void initFailed(String message, Throwable t) {
-//		if (this.logger.isSevereEnabled()) {
-//			this.logger.severe("Failed to initializee CDR Database! Message: '" + message + "'", t);
-//		}
-//
-//	}
-//
-//	/*
-//	 * (non-Javadoc)
-//	 * 
-//	 * @see
-//	 * org.mobicents.ussdgateway.slee.cdr.ChargeInterfaceParent#initSuccessed()
-//	 */
-//	@Override
-//	public void initSuccessed() {
-//		if (this.logger.isFineEnabled()) {
-//			this.logger.fine("CDR Database has been initialized!");
-//		}
-//
-//	}
-
 	// ///////////////////////////////////////////////
 	// protected child stuff, to be used in parent //
 	// ///////////////////////////////////////////////
@@ -796,13 +754,39 @@ public abstract class ChildSbb extends USSDBaseSbb implements ChildInterface {
 		}
 	}
 
-	private void setTimer(ActivityContextInterface ac) {
+	protected void setTimer(ActivityContextInterface ac) {
 		TimerOptions options = new TimerOptions();
-		long waitingTime = this.getUssdPropertiesManagement().getDialogTimeout();
+		long waitingTime = this.getTimerDelayMs();
 		TimerID timerID = this.timerFacility.setTimer(ac, null, System.currentTimeMillis() + waitingTime, options);
 		this.setTimerID(timerID);
 		MAPDialogSupplementary mapDialog = this.getMAPDialog();
 		logger.info(String.format("JENNY-TIMER-SET: localDialogId=%s waitingTime=%d timerID=%s", 
 			mapDialog != null ? mapDialog.getLocalDialogId() : "null", waitingTime, timerID));
+	}
+
+	/**
+	 * Delay used when arming the per-message timer. By default uses the (shorter) async gate
+	 * timeout when the bridge is enabled, else the legacy dialog timeout. Subclasses (e.g. gRPC)
+	 * may override to implement a shorter response-poll interval.
+	 */
+	protected long getTimerDelayMs() {
+		SessionBridgeSupport bridge = SessionBridgeSupport.getInstance();
+		return bridge.isEnabled() ? bridge.gateTimeoutMs()
+				: this.getUssdPropertiesManagement().getDialogTimeout();
+	}
+
+	/**
+	 * Protocol-specific timer hook invoked at the very start of {@link #onTimerEvent}. Default
+	 * implementation does nothing and returns {@code false} (i.e. proceed with the standard
+	 * timeout handling). Subclasses that poll for an asynchronous response (gRPC) override this.
+	 *
+	 * @return {@code true} if the timer was fully handled and no further processing is needed.
+	 */
+	protected boolean onProtocolTimer(ActivityContextInterface aci) {
+		return false;
+	}
+
+	protected void rearmTimer(ActivityContextInterface ac) {
+		this.setTimer(ac);
 	}
 }

@@ -18,6 +18,7 @@
   						<li class="active"><a href="#errormessages" data-toggle="tab">Error Messages</a></li>
   						<li><a href="#ss7settings" data-toggle="tab">SS7 settings</a></li>
   						<li><a href="#various" data-toggle="tab">Various</a></li>
+  						<li><a href="#sessionbridge" data-toggle="tab">Session Bridge</a></li>
 					</ul>	
 						
   				 	<div id="sbb-op-content" class="tab-content">
@@ -147,7 +148,56 @@
 									<input id="cdrseparator" type="text" class="input-mini" style="width: 120px; margin-right: 12px; text-align: center;" value="0" />
 								</span>                        
 							</div>
-                        </div>                        					  	
+                        </div>
+
+                        <div class="tab-pane" id="sessionbridge">
+                        	<h5 style="border-bottom: 1px solid #DDD;">Virtual Session Bridge</h5>
+
+                        	<div id="div-sessionbridgeenabled" class="control-group">
+								<span class="input-prepend" data-toggle="tooltip" data-placement="bottom" title="Master feature flag. When disabled the gateway behaves exactly as before (no async bridge, no early dialog release).">
+									<span class="add-on">Session bridge enabled</span>
+									<select id="sessionbridgeenabled" >
+										<option>false</option>
+										<option>true</option>
+									</select>
+								</span>
+							</div>
+
+                        	<div id="div-asyncgatetimeoutms" class="control-group">
+								<span class="input-prepend" data-toggle="tooltip" data-placement="bottom" title="Release the MO dialogue this many milliseconds after the AS request, before the network timeout. Must be less than Dialog Timeout.">
+									<span class="add-on">Async gate timeout (ms)</span>
+									<input id="asyncgatetimeoutms" type="text" class="input-mini" style="width: 120px; margin-right: 12px; text-align: center;" value="0" />
+								</span>
+							</div>
+
+                        	<div id="div-asyncwaitusermessage" class="control-group">
+								<span class="input-prepend" data-toggle="tooltip" data-placement="bottom" title="Message shown to the user when the gateway bridges a slow AS request.">
+									<span class="add-on">Async wait message</span>
+									<input id="asyncwaitusermessage" type="text" class="input-mini" style="width: 260px; margin-right: 12px; text-align: center;" value="0" />
+								</span>
+							</div>
+
+                        	<div id="div-asynchardfailmessage" class="control-group">
+								<span class="input-prepend" data-toggle="tooltip" data-placement="bottom" title="Message shown to the user when the AS hard-fails or the gateway is overloaded.">
+									<span class="add-on">Async hard-fail message</span>
+									<input id="asynchardfailmessage" type="text" class="input-mini" style="width: 260px; margin-right: 12px; text-align: center;" value="0" />
+								</span>
+							</div>
+
+                        	<div id="div-bridgestatettlsec" class="control-group">
+								<span class="input-prepend" data-toggle="tooltip" data-placement="bottom" title="Time-to-live (seconds) for bridged session state stored in Infinispan.">
+									<span class="add-on">Bridge state TTL (sec)</span>
+									<input id="bridgestatettlsec" type="text" class="input-mini" style="width: 120px; margin-right: 12px; text-align: center;" value="0" />
+								</span>
+							</div>
+
+                        	<div id="div-pushretrydelaysms" class="control-group">
+								<span class="input-prepend" data-toggle="tooltip" data-placement="bottom" title="Comma-separated back-off (milliseconds) used when a Network-Initiated push is rejected, e.g. 3000,8000,15000.">
+									<span class="add-on">Push retry delays (ms)</span>
+									<input id="pushretrydelaysms" type="text" class="input-mini" style="width: 200px; margin-right: 12px; text-align: center;" value="0" />
+								</span>
+							</div>
+                        </div>
 					</div>	
 					</span>					 
 				</p>	
@@ -186,7 +236,20 @@
 										} else {
 											e.options[1].selected = 'selected';
 										}
-										
+
+										// Virtual Session Bridge
+										var sbe = document.getElementById("sessionbridgeenabled");
+										if(response.value.SessionBridgeEnabled == true){
+											sbe.options[1].selected = 'selected';
+										} else {
+											sbe.options[0].selected = 'selected';
+										}
+										$("#asyncgatetimeoutms").val(response.value.AsyncGateTimeoutMs);
+										$("#asyncwaitusermessage").val(response.value.AsyncWaitUserMessage);
+										$("#asynchardfailmessage").val(response.value.AsyncHardFailMessage);
+										$("#bridgestatettlsec").val(response.value.BridgeStateTtlSec);
+										$("#pushretrydelaysms").val(response.value.PushRetryDelaysMs);
+
 										$("#gtinisel").append(new Option("0", response.value.UssdGt));
 										
 										jQuery.each(response.value.NetworkIdVsUssdGwGt, function(key, val) {
@@ -323,7 +386,15 @@
 						
 						var e = document.getElementById("cdrgeneratedto");
 						var cdrgeneratedto = e.options[e.selectedIndex].text;						
-						
+
+						var sbe = document.getElementById("sessionbridgeenabled");
+						var sessionbridgeenabled = (sbe.options[sbe.selectedIndex].text == "true");
+						var asyncgatetimeoutms = $("#asyncgatetimeoutms").val();
+						var asyncwaitusermessage = $("#asyncwaitusermessage").val();
+						var asynchardfailmessage = $("#asynchardfailmessage").val();
+						var bridgestatettlsec = $("#bridgestatettlsec").val();
+						var pushretrydelaysms = $("#pushretrydelaysms").val();
+
 						if(formInvalid) {
 							$("#login-settings-error").show();
 							logToConsole("ERROR", "Some Fields are not correctly filled out, please double check the settings !");
@@ -351,6 +422,12 @@
 									{ type: "write", mbean: mbeanSearch, attribute: "MaxMapVersion", value: maxmapv },
 									{ type: "write", mbean: mbeanSearch, attribute: "HrHlrGt", value: hrhlrgt },
 									{ type: "write", mbean: mbeanSearch, attribute: "CdrLoggingToStr", value: cdrgeneratedto },
+									{ type: "write", mbean: mbeanSearch, attribute: "SessionBridgeEnabled", value: sessionbridgeenabled },
+									{ type: "write", mbean: mbeanSearch, attribute: "AsyncGateTimeoutMs", value: asyncgatetimeoutms },
+									{ type: "write", mbean: mbeanSearch, attribute: "AsyncWaitUserMessage", value: asyncwaitusermessage },
+									{ type: "write", mbean: mbeanSearch, attribute: "AsyncHardFailMessage", value: asynchardfailmessage },
+									{ type: "write", mbean: mbeanSearch, attribute: "BridgeStateTtlSec", value: bridgestatettlsec },
+									{ type: "write", mbean: mbeanSearch, attribute: "PushRetryDelaysMs", value: pushretrydelaysms },
 								],
 								{
 									success: function(response) {
