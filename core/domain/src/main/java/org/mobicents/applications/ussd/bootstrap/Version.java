@@ -71,48 +71,33 @@ public final class Version {
 	}
 
     public String getProjectName() {
-        String version = instance.getProperty("name");
-        if (version != null) {
-            return version;
-        } else {
-            return "???";
-        }
+
+            return "USSDGW-NG";
+        
     }
 
     public String getProjectType() {
-        String version = instance.getProperty("project.type");
-        if (version != null) {
-            return version;
-        } else {
-            return "???";
-        }
+
+            return "Dev by nhanth87";
+        
     }
 
     public String getProjectVersion() {
-        String version = instance.getProperty("version");
-        if (version != null) {
-            return version;
-        } else {
-            return "???";
-        }
+ 
+            return "USSDGW-NG";
+        
     }
 
     public String getStatisticsServer() {
-        String version = instance.getProperty("statistics.server");
-        if (version != null) {
-            return version;
-        } else {
-            return "https://statistics.restcomm.com/rest/";
-        }
+
+            return "";
+        
     }
 
     public String getShortName() {
-        String version = instance.getProperty("short.name");
-        if (version != null) {
-            return version;
-        } else {
-            return "???";
-        }
+
+            return "DMM";
+        
     }
 
 	/**
@@ -121,7 +106,7 @@ public final class Version {
 	 * @return Basic information as a string.
 	 */
 	public String toString() {
-		StringBuilder sb = new StringBuilder("Mobicents USSD Gateway Server: ");
+		StringBuilder sb = new StringBuilder("NextGen USSD Gateway: ");
 		boolean first = true;
 		for (Object key : props.keySet()) {
 			if (first) {

@@ -38,10 +38,21 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.StringReader;
+import java.io.StringWriter;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+
+import javax.xml.stream.XMLEventFactory;
+import javax.xml.stream.XMLEventReader;
+import javax.xml.stream.XMLEventWriter;
+import javax.xml.stream.XMLInputFactory;
+import javax.xml.stream.XMLOutputFactory;
+import javax.xml.stream.events.XMLEvent;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,8 +79,11 @@ import org.restcomm.protocols.ss7.map.errors.MAPErrorMessageSubscriberBusyForMtS
 import org.restcomm.protocols.ss7.map.errors.MAPErrorMessageSystemFailureImpl;
 import org.restcomm.protocols.ss7.map.errors.MAPErrorMessageUnauthorizedLCSClientImpl;
 import org.restcomm.protocols.ss7.map.errors.MAPErrorMessageUnknownSubscriberImpl;
+import org.restcomm.protocols.ss7.sccp.SCCPJacksonXMLHelper;
 import org.restcomm.protocols.ss7.sccp.impl.parameter.DefaultEncodingScheme;
+import org.restcomm.protocols.ss7.sccp.impl.parameter.SccpAddressImpl;
 import org.restcomm.protocols.ss7.sccp.impl.parameter.GlobalTitle0001Impl;
+import org.restcomm.protocols.ss7.sccp.parameter.SccpAddress;
 import org.restcomm.protocols.ss7.sccp.impl.parameter.GlobalTitle0010Impl;
 import org.restcomm.protocols.ss7.sccp.impl.parameter.GlobalTitle0011Impl;
 import org.restcomm.protocols.ss7.sccp.impl.parameter.GlobalTitle0100Impl;
@@ -88,6 +102,8 @@ import org.restcomm.protocols.ss7.map.primitives.AlertingPatternImpl;
 import org.restcomm.protocols.ss7.map.api.MAPMessage;
 import org.restcomm.protocols.ss7.map.api.errors.MAPErrorMessage;
 import org.restcomm.protocols.ss7.tcap.asn.comp.Problem;
+
+import org.mobicents.ussdgateway.FastList;
 
 /**
  * Factory Object used to serialize/de-serialize the {@link XmlMAPDialog} objects
@@ -129,6 +145,8 @@ public class EventsSerializeFactory {
 
     // Jackson XML mapper - thread-safe and reusable
     private final XmlMapper xmlMapper;
+    /** jSS7 SCCP mapper — javolution-compatible SCCP address XML without gateway mixins. */
+    private final XmlMapper sccpXmlMapper = SCCPJacksonXMLHelper.getXmlMapper();
     private final Charset charset = StandardCharsets.UTF_8;
     
     // Class registry for type handling
@@ -144,9 +162,10 @@ public class EventsSerializeFactory {
         this.xmlMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         this.xmlMapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
         
-        // Register mixins for jSS7 classes that lack complete Jackson annotations
-        this.xmlMapper.addMixIn(org.restcomm.protocols.ss7.sccp.parameter.SccpAddress.class, SccpAddressMixin.class);
-        this.xmlMapper.addMixIn(org.restcomm.protocols.ss7.sccp.impl.parameter.SccpAddressImpl.class, SccpAddressImplMixin.class);
+        // Register mixins for jSS7 classes that lack complete Jackson annotations.
+        // Do NOT mix in SccpAddress/SccpAddressImpl here — @JsonDeserialize(as=SccpAddressImpl)
+        // on the interface causes StackOverflow; use SCCPJacksonXMLHelper for SCCP instead.
+        this.xmlMapper.addMixIn(XmlMAPDialog.class, XmlMAPDialogSccpMixin.class);
         this.xmlMapper.addMixIn(org.restcomm.protocols.ss7.map.api.errors.MAPErrorMessage.class, MAPErrorMessageMixin.class);
         this.xmlMapper.addMixIn(org.restcomm.protocols.ss7.tcap.asn.comp.Problem.class, ProblemMixin.class);
         
@@ -317,6 +336,62 @@ public class EventsSerializeFactory {
         registerAlias(XmlMAPDialog.class, DIALOG);
     }
     
+    /**
+     * Serialize dialog to javolution-compatible XML: MAP messages are direct
+     * child elements of &lt;dialog&gt;, not wrapped in &lt;mapMessages&gt;.
+     */
+    private byte[] serializeDialogXml(XmlMAPDialog dialog) throws IOException {
+        String shell = xmlMapper.writeValueAsString(dialog);
+        FastList<MAPMessage> messages = dialog.getMAPMessages();
+        if (messages == null || messages.isEmpty()) {
+            return shell.getBytes(charset);
+        }
+
+        int closeTag = shell.lastIndexOf("</dialog>");
+        if (closeTag < 0) {
+            // Self-closing or empty dialog — append messages then close.
+            if (shell.endsWith("/>")) {
+                StringBuilder expanded = new StringBuilder(shell.length() + 64);
+                expanded.append(shell, 0, shell.length() - 2);
+                appendMapMessageElements(expanded, messages);
+                expanded.append("</dialog>");
+                return expanded.toString().getBytes(charset);
+            }
+            return shell.getBytes(charset);
+        }
+
+        StringBuilder out = new StringBuilder(shell.length() + messages.size() * 128);
+        out.append(shell, 0, closeTag);
+        appendMapMessageElements(out, messages);
+        out.append(shell.substring(closeTag));
+        return out.toString().getBytes(charset);
+    }
+
+    private void appendMapMessageElements(StringBuilder out, FastList<MAPMessage> messages) throws IOException {
+        for (int i = 0; i < messages.size(); i++) {
+            MAPMessage msg = messages.get(i);
+            if (msg == null) {
+                continue;
+            }
+            String msgXml = stripXmlDeclaration(xmlMapper.writeValueAsString(msg));
+            out.append(msgXml);
+        }
+    }
+
+    private String stripXmlDeclaration(String xml) {
+        if (xml == null || xml.isEmpty()) {
+            return "";
+        }
+        String trimmed = xml.trim();
+        if (trimmed.startsWith("<?xml")) {
+            int end = trimmed.indexOf("?>");
+            if (end >= 0) {
+                return trimmed.substring(end + 2).trim();
+            }
+        }
+        return trimmed;
+    }
+
     private void registerAlias(Class<?> clazz, String alias) {
         classToAlias.put(clazz, alias);
         aliasToClass.put(alias, clazz);
@@ -359,8 +434,7 @@ public class EventsSerializeFactory {
             
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             logger.debug("JENNY-SERIALIZE-WRITING-TO-XMLMAPPER...");
-            xmlMapper.writeValue(baos, dialog);
-            byte[] result = baos.toByteArray();
+            byte[] result = serializeDialogXml(dialog);
             
             String xmlOutput = new String(result, charset);
             logger.info("JENNY-SERIALIZE-SUCCESS: xmlLength={} bytes, xmlContent={}", 
@@ -448,10 +522,12 @@ public class EventsSerializeFactory {
         
         try {
             logger.debug("JENNY-DESERIALIZE-PARSING: Calling xmlMapper.readTree...");
-            JsonNode root = xmlMapper.readTree(new ByteArrayInputStream(data));
+            java.util.List<MapMessageFragment> mapFragments = extractFlatMapMessageFragments(xmlContent);
+            String dialogShell = removeFlatMapMessageElements(xmlContent);
+            JsonNode root = xmlMapper.readTree(dialogShell.getBytes(charset));
             logger.debug("JENNY-DESERIALIZE-PARSED: JSON node created, fields={}", root.size());
             
-            XmlMAPDialog result = deserializeFromJsonNode(root);
+            XmlMAPDialog result = deserializeFromJsonNode(root, mapFragments);
             logger.info("JENNY-DESERIALIZE-RESULT: dialog={} mapMessagesCount={}", 
                 result != null ? result.getLocalDialogId() : "NULL",
                 result != null && result.getMAPMessages() != null ? result.getMAPMessages().size() : 0);
@@ -480,10 +556,13 @@ public class EventsSerializeFactory {
         
         try {
             logger.debug("JENNY-DESERIALIZE-INPUTSTREAM: Parsing InputStream...");
-            JsonNode root = xmlMapper.readTree(is);
-            logger.debug("JENNY-DESERIALIZE-INPUTSTREAM: JSON node created");
-            
-            return deserializeFromJsonNode(root);
+            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+            byte[] chunk = new byte[4096];
+            int read;
+            while ((read = is.read(chunk)) != -1) {
+                buffer.write(chunk, 0, read);
+            }
+            return deserialize(buffer.toByteArray());
         } catch (Exception e) {
             logger.error("JENNY-DESERIALIZE-INPUTSTREAM-ERROR: {} - {}", 
                 e.getClass().getSimpleName(), e.getMessage(), e);
@@ -491,12 +570,131 @@ public class EventsSerializeFactory {
         }
     }
     
+    private static final class MapMessageFragment {
+        private final String typeName;
+        private final String xml;
+
+        private MapMessageFragment(String typeName, String xml) {
+            this.typeName = typeName;
+            this.xml = xml;
+        }
+    }
+
+    private Set<String> getMapMessageElementNames() {
+        Set<String> names = new HashSet<String>();
+        for (java.util.Map.Entry<String, Class<?>> entry : aliasToClass.entrySet()) {
+            Class<?> clazz = entry.getValue();
+            if (clazz != null && MAPMessage.class.isAssignableFrom(clazz)) {
+                names.add(entry.getKey());
+            }
+        }
+        return names;
+    }
+
+    /**
+     * Javolution flat XML allows repeated MAP message element names as direct
+     * children of &lt;dialog&gt;. Jackson readTree() keeps only the last duplicate key.
+     */
+    private List<MapMessageFragment> extractFlatMapMessageFragments(String xml) throws Exception {
+        Set<String> mapTags = getMapMessageElementNames();
+        List<MapMessageFragment> fragments = new ArrayList<MapMessageFragment>();
+        if (xml == null || xml.isEmpty() || mapTags.isEmpty()) {
+            return fragments;
+        }
+
+        XMLInputFactory inputFactory = XMLInputFactory.newFactory();
+        inputFactory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, Boolean.FALSE);
+        inputFactory.setProperty(XMLInputFactory.SUPPORT_DTD, Boolean.FALSE);
+        XMLEventReader reader = inputFactory.createXMLEventReader(new StringReader(xml));
+        XMLOutputFactory outputFactory = XMLOutputFactory.newFactory();
+
+        while (reader.hasNext()) {
+            XMLEvent event = reader.peek();
+            if (event.isStartElement()) {
+                String localName = event.asStartElement().getName().getLocalPart();
+                if (mapTags.contains(localName)) {
+                    StringWriter writer = new StringWriter();
+                    XMLEventWriter elementWriter = outputFactory.createXMLEventWriter(writer);
+                    copyXmlElement(reader, elementWriter);
+                    elementWriter.flush();
+                    elementWriter.close();
+                    fragments.add(new MapMessageFragment(localName, writer.toString()));
+                    continue;
+                }
+            }
+            reader.nextEvent();
+        }
+        reader.close();
+        return fragments;
+    }
+
+    private String removeFlatMapMessageElements(String xml) throws Exception {
+        Set<String> mapTags = getMapMessageElementNames();
+        if (xml == null || xml.isEmpty() || mapTags.isEmpty()) {
+            return xml;
+        }
+
+        XMLInputFactory inputFactory = XMLInputFactory.newFactory();
+        inputFactory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, Boolean.FALSE);
+        inputFactory.setProperty(XMLInputFactory.SUPPORT_DTD, Boolean.FALSE);
+        XMLEventReader reader = inputFactory.createXMLEventReader(new StringReader(xml));
+        StringWriter writer = new StringWriter();
+        XMLOutputFactory outputFactory = XMLOutputFactory.newFactory();
+        XMLEventWriter output = outputFactory.createXMLEventWriter(writer);
+
+        while (reader.hasNext()) {
+            XMLEvent event = reader.peek();
+            if (event.isStartElement()) {
+                String localName = event.asStartElement().getName().getLocalPart();
+                if (mapTags.contains(localName)) {
+                    skipXmlElement(reader);
+                    continue;
+                }
+            }
+            output.add(reader.nextEvent());
+        }
+        output.flush();
+        output.close();
+        reader.close();
+        return writer.toString();
+    }
+
+    private void copyXmlElement(XMLEventReader reader, XMLEventWriter writer) throws Exception {
+        int depth = 0;
+        do {
+            XMLEvent event = reader.nextEvent();
+            writer.add(event);
+            if (event.isStartElement()) {
+                depth++;
+            } else if (event.isEndElement()) {
+                depth--;
+            }
+        } while (depth > 0);
+    }
+
+    private void skipXmlElement(XMLEventReader reader) throws Exception {
+        int depth = 0;
+        do {
+            XMLEvent event = reader.nextEvent();
+            if (event.isStartElement()) {
+                depth++;
+            } else if (event.isEndElement()) {
+                depth--;
+            }
+        } while (depth > 0);
+    }
+
     /**
      * Deserialize from pre-parsed JsonNode.
      * Separates MAP messages (which may be in flat external XML format without WRAPPER_OBJECT)
      * from standard dialog fields, then manually adds messages back.
      */
     private XmlMAPDialog deserializeFromJsonNode(JsonNode root) throws Exception {
+        return deserializeFromJsonNode(root, null);
+    }
+
+    private XmlMAPDialog deserializeFromJsonNode(JsonNode root, List<MapMessageFragment> preExtractedMapMessages)
+            throws Exception {
         if (root == null || root.isNull()) {
             logger.warn("JENNY-DESERIALIZE-FROM-JSON: root is null or null node, returning null");
             return null;
@@ -518,6 +716,17 @@ public class EventsSerializeFactory {
         int processedFields = 0;
         int mapMessageCount = 0;
         int errorComponentCount = 0;
+
+        if (preExtractedMapMessages != null && !preExtractedMapMessages.isEmpty()) {
+            logger.info("JENNY-DESERIALIZE-FIELD: Using {} pre-extracted MAP message fragments", preExtractedMapMessages.size());
+            for (MapMessageFragment fragment : preExtractedMapMessages) {
+                JsonNode msgNode = xmlMapper.readTree(fragment.xml);
+                com.fasterxml.jackson.databind.node.ObjectNode wrapper = xmlMapper.createObjectNode();
+                wrapper.set(fragment.typeName, msgNode);
+                messageWrappers.add(wrapper);
+                mapMessageCount++;
+            }
+        }
         
         java.util.Iterator<String> fieldNames = root.fieldNames();
         while (fieldNames.hasNext()) {
@@ -530,6 +739,9 @@ public class EventsSerializeFactory {
             // Format like: <processUnstructuredSSRequest_Response invokeId="0" dataCodingScheme="15" string="..."/>
             Class<?> clazz = aliasToClass.get(fieldName);
             if (clazz != null && MAPMessage.class.isAssignableFrom(clazz)) {
+                if (preExtractedMapMessages != null && !preExtractedMapMessages.isEmpty()) {
+                    continue;
+                }
                 // This is a direct MAP message in javolution flat format
                 logger.info("JENNY-DESERIALIZE-FIELD: Found MAP Message field '{}' (value type: {})", fieldName, value.getNodeType());
                 com.fasterxml.jackson.databind.node.ObjectNode wrapper = xmlMapper.createObjectNode();
@@ -680,6 +892,10 @@ public class EventsSerializeFactory {
                 logger.error("JENNY-DESERIALIZE-REJCOMP-APPLY-ERROR: invokeId={}", e.getKey(), mex);
             }
         }
+
+        // XmlMAPDialog marks localAddress/remoteAddress @JsonIgnore — parse javolution flat SCCP XML here.
+        applySccpAddressFromNode(dialog, root, SCCP_LOCAL_ADDRESS);
+        applySccpAddressFromNode(dialog, root, SCCP_REMOTE_ADDRESS);
         
         // Manually deserialize MAP messages by looking up type name from wrapper field name
         int successfullyDeserialized = 0;
@@ -700,9 +916,8 @@ public class EventsSerializeFactory {
                             wIdx, typeName, msgNode.toString());
                         
                         // Normalize Jackson XML attribute prefixes (@attr -> attr)
-                        // Jackson reads XML attributes as @attributeName
-                        // But POJO @JacksonXmlProperty expects plain attributeName
-                        JsonNode normalizedNode = normalizeXmlAttributes(msgNode);
+                        // and javolution supplementary message element names (ussdString -> string).
+                        JsonNode normalizedNode = normalizeSupplementaryMessageNode(msgNode);
                         logger.debug("JENNY-DESERIALIZE-MAP-MESSAGE[{}]: normalized node={}", 
                             wIdx, normalizedNode.toString());
                         
@@ -773,6 +988,162 @@ public class EventsSerializeFactory {
         return dialog;
     }
     
+    private static final String SCCP_LOCAL_ADDRESS = "localAddress";
+    private static final String SCCP_REMOTE_ADDRESS = "remoteAddress";
+
+    private void applySccpAddressFromNode(XmlMAPDialog dialog, JsonNode root, String fieldName) {
+        if (dialog == null || root == null || !root.has(fieldName)) {
+            return;
+        }
+        JsonNode addressNode = root.get(fieldName);
+        if (addressNode == null || addressNode.isNull()) {
+            return;
+        }
+        try {
+            SccpAddress address = deserializeSccpAddress(addressNode);
+            if (address == null) {
+                return;
+            }
+            if (SCCP_LOCAL_ADDRESS.equals(fieldName)) {
+                dialog.setLocalAddress(address);
+            } else if (SCCP_REMOTE_ADDRESS.equals(fieldName)) {
+                dialog.setRemoteAddress(address);
+            }
+        } catch (Exception ex) {
+            logger.error("JENNY-DESERIALIZE-SCCP-ERROR: field={}", fieldName, ex);
+            addDeserializationError(fieldName, ex.getMessage());
+        }
+    }
+
+    private SccpAddress deserializeSccpAddress(JsonNode node) throws IOException {
+        JsonNode normalized = normalizeSccpAddressNode(normalizeXmlAttributes(node));
+        return sccpXmlMapper.treeToValue(normalized, SccpAddressImpl.class);
+    }
+
+    /**
+     * Normalize javolution SCCP address XML to the flat element names SccpAddressImpl expects.
+     * Supports both flat format (&lt;ai&gt;, &lt;gt&gt;) and legacy long names
+     * (&lt;addressIndicator&gt;, &lt;globalTitle&gt;).
+     */
+    private JsonNode normalizeSccpAddressNode(JsonNode node) {
+        if (node == null || !node.isObject()) {
+            return node;
+        }
+        com.fasterxml.jackson.databind.node.ObjectNode source = (com.fasterxml.jackson.databind.node.ObjectNode) node;
+        com.fasterxml.jackson.databind.node.ObjectNode result = xmlMapper.createObjectNode();
+
+        copySccpField(source, result, "addressIndicator", "ai");
+        copySccpField(source, result, "signallingPointCode", "pc");
+        copySccpField(source, result, "subsystemNumber", "ssn");
+        copySccpField(source, result, "globalTitle", "gt");
+
+        for (String field : new String[] {"ai", "pc", "ssn", "networkId"}) {
+            if (source.has(field) && !result.has(field)) {
+                result.set(field, source.get(field));
+            }
+        }
+        if (source.has("gt") && !result.has("gt")) {
+            result.set("gt", normalizeGlobalTitleNode(source.get("gt")));
+        } else if (result.has("gt")) {
+            result.set("gt", normalizeGlobalTitleNode(result.get("gt")));
+        }
+        normalizeAddressIndicatorNode(result);
+        return result;
+    }
+
+    private void normalizeAddressIndicatorNode(com.fasterxml.jackson.databind.node.ObjectNode addressNode) {
+        if (!addressNode.has("ai")) {
+            return;
+        }
+        JsonNode ai = addressNode.get("ai");
+        if (ai.isTextual() || ai.isNumber()) {
+            com.fasterxml.jackson.databind.node.ObjectNode aiObj = xmlMapper.createObjectNode();
+            aiObj.put("value", ai.asInt());
+            addressNode.set("ai", aiObj);
+        }
+    }
+
+    private String mapJavolutionNatureOfAddress(String javolutionName) {
+        if (javolutionName == null || javolutionName.isEmpty()) {
+            return javolutionName;
+        }
+        if ("international_number".equals(javolutionName)) {
+            return "INTERNATIONAL";
+        }
+        if ("national_significant_number".equals(javolutionName)) {
+            return "NATIONAL";
+        }
+        if ("subscriber_number".equals(javolutionName)) {
+            return "SUBSCRIBER";
+        }
+        if ("unknown".equals(javolutionName)) {
+            return "UNKNOWN";
+        }
+        if (javolutionName.indexOf('_') >= 0) {
+            return javolutionName.toUpperCase();
+        }
+        return javolutionName;
+    }
+
+    private void copySccpField(com.fasterxml.jackson.databind.node.ObjectNode source,
+            com.fasterxml.jackson.databind.node.ObjectNode target, String legacyName, String flatName) {
+        if (source.has(legacyName) && !target.has(flatName)) {
+            target.set(flatName, source.get(legacyName));
+        }
+    }
+
+    private JsonNode normalizeGlobalTitleNode(JsonNode gtNode) {
+        if (gtNode == null || !gtNode.isObject()) {
+            return gtNode;
+        }
+        com.fasterxml.jackson.databind.node.ObjectNode gt =
+                (com.fasterxml.jackson.databind.node.ObjectNode) gtNode;
+        if (gt.has("natureOfAddressIndicator") && !gt.has("nai")) {
+            gt.set("nai", gt.get("natureOfAddressIndicator"));
+        }
+        if (gt.has("nai") && gt.get("nai").isTextual()) {
+            String mapped = mapJavolutionNatureOfAddress(gt.get("nai").asText());
+            gt.put("nai", mapped);
+        }
+        return gt;
+    }
+
+    /**
+     * Normalize javolution supplementary MAP message XML:
+     * &lt;ussdString&gt;text&lt;/ussdString&gt; -> string property expected by SupplementaryMessageImpl.
+     */
+    private JsonNode normalizeSupplementaryMessageNode(JsonNode node) {
+        JsonNode normalized = normalizeXmlAttributes(node);
+        if (normalized == null || !normalized.isObject()) {
+            return normalized;
+        }
+        com.fasterxml.jackson.databind.node.ObjectNode result =
+                ((com.fasterxml.jackson.databind.node.ObjectNode) normalized).deepCopy();
+        if (result.has("ussdString") && !result.has("string")) {
+            String ussdText = extractTextContent(result.get("ussdString"));
+            if (ussdText != null) {
+                result.put("string", ussdText);
+            }
+        }
+        return result;
+    }
+
+    private String extractTextContent(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        if (node.isTextual()) {
+            return node.asText();
+        }
+        if (node.isObject() && node.has("")) {
+            JsonNode text = node.get("");
+            if (text != null && text.isTextual()) {
+                return text.asText();
+            }
+        }
+        return null;
+    }
+
     /**
      * Normalize Jackson XML attribute prefixes (@attr -> attr) for treeToValue deserialization.
      * Jackson XML readTree() encodes XML attributes with '@' prefix, but treeToValue()
@@ -839,7 +1210,7 @@ public class EventsSerializeFactory {
         if (dialog == null) {
             return "";
         }
-        return xmlMapper.writeValueAsString(dialog);
+        return new String(serializeDialogXml(dialog), charset);
     }
     
     /**
@@ -849,9 +1220,9 @@ public class EventsSerializeFactory {
         if (xml == null || xml.isEmpty()) {
             return null;
         }
-        // Use deserializeFromJsonNode to support both internal Jackson format 
-        // and external flat XML format (javolution compatible)
-        JsonNode root = xmlMapper.readTree(xml);
-        return deserializeFromJsonNode(root);
+        java.util.List<MapMessageFragment> mapFragments = extractFlatMapMessageFragments(xml);
+        String dialogShell = removeFlatMapMessageElements(xml);
+        JsonNode root = xmlMapper.readTree(dialogShell);
+        return deserializeFromJsonNode(root, mapFragments);
     }
 }

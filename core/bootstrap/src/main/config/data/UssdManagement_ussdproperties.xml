@@ -13,4 +13,10 @@
   <cdrloggingto>Textfile</cdrloggingto>
   <cdrSeparator>:</cdrSeparator>
   <maxactivitycount>5000</maxactivitycount>
+  <sessionbridgeenabled>false</sessionbridgeenabled>
+  <asyncgatetimeoutms>7000</asyncgatetimeoutms>
+  <asyncwaitusermessage>Hệ thống đang bận, sẽ update lại cho bạn ngay</asyncwaitusermessage>
+  <asynchardfailmessage>Hệ thống đang có nhiều người sử dụng, vui lòng dùng lại sau</asynchardfailmessage>
+  <bridgestatettlsec>180</bridgestatettlsec>
+  <pushretrydelaysms>3000,8000,15000</pushretrydelaysms>
 </HashMap>

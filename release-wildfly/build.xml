@@ -139,6 +139,9 @@
         <!-- Apply pre-patched standalone.xml -->
         <copy file="${patched.standalone.xml}" tofile="${jboss.home}/standalone/configuration/standalone.xml" overwrite="true" />
 
+        <!-- Overlay USSD Gateway JVM tuning (jSS7 Phase 4 zero-copy flags) -->
+        <copy file="${base.dir}/standalone.conf" tofile="${jboss.home}/bin/standalone.conf" overwrite="true" />
+
         <!-- Patch standalone.conf to use standalone.xml instead of standalone-sip.xml -->
         <replace file="${jboss.home}/bin/standalone.conf" token='JAVA_OPTS="$JAVA_OPTS -Djboss.server.default.config=standalone-sip.xml"' value='JAVA_OPTS="$JAVA_OPTS -Djboss.server.default.config=standalone.xml"' />
 
@@ -272,6 +275,14 @@
         <!-- deploy: JDBC RA DU from Maven local repo (newest 7.2.0-113) -->
         <echo>Copy RestComm JDBC RA DU from local .m2</echo>
         <copy file="${m2.repo}/org/restcomm/resources/restcomm-slee-ra-jdbc-DU/${restcomm-slee.jdbc.version}/restcomm-slee-ra-jdbc-DU-${restcomm-slee.jdbc.version}.jar" todir="${deploy.dir}" failonerror="true" />
+
+        <!-- deploy: CDR Local RA DU from local workspace -->
+        <echo>Copy USSD CDR Local RA DU from local workspace</echo>
+        <copy file="${restcomm.ussd.dir}/core/slee/resources/cdr-local/du/target/ussd-cdr-local-ra-DU-${restcomm.ussd.release.version}.jar" todir="${deploy.dir}" failonerror="true" />
+
+        <!-- deploy: gRPC AS RA DU from local workspace -->
+        <echo>Copy USSD gRPC AS RA DU from local workspace</echo>
+        <copy file="${restcomm.ussd.dir}/core/slee/resources/grpc-as/du/target/ussd-grpc-as-ra-DU-${restcomm.ussd.release.version}.jar" todir="${deploy.dir}" failonerror="true" />
 
         <!-- deploy: jSS7 OAM UI from local workspace -->
         <copy todir="${deploy.dir}" failonerror="true">

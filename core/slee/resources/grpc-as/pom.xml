@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.mobicents.ussd</groupId>
+        <artifactId>resources</artifactId>
+        <version>7.2.1-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>ussd-grpc-as-ra</artifactId>
+    <packaging>pom</packaging>
+    <name>Core : SLEE : gRPC AS RA</name>
+
+    <description>
+        JAIN SLEE Resource Adaptor that lets the USSD Gateway talk to an Application Server over
+        gRPC (HTTP/2), mirroring the HTTP client RA: the gateway is the gRPC client, the AS is the
+        gRPC server. Carries the session id (correlation id) so the AS can keep per-session state
+        across MO (pull) and NI (push) interactions.
+    </description>
+
+    <properties>
+        <grpc.version>1.59.1</grpc.version>
+    </properties>
+
+    <modules>
+        <module>library</module>
+        <module>ratype</module>
+        <module>ra</module>
+        <module>du</module>
+    </modules>
+</project>

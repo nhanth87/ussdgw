@@ -1,0 +1,64 @@
+"""
+gRPC request/response envelope codec for the USSD Gateway gRPC AS RA.
+
+The gateway's gRPC method ``ussd.UssdApplicationService/Process`` transports an opaque ``bytes``
+body whose content is a compact JSON envelope. This module mirrors the Java
+``GrpcEnvelopeCodec`` so the Python Application Server interoperates without protobuf code
+generation.
+
+Request envelope:
+    {"sessionId": "...", "correlationId": "...", "push": false, "networkId": 0, "payloadB64": "..."}
+
+Response envelope:
+    {"success": true, "correlationId": "...", "payloadB64": "...", "error": null}
+
+``payloadB64`` is the Base64 of the serialized ``XmlMAPDialog`` exchanged with the gateway.
+"""
+
+import base64
+import json
+
+
+def decode_request(raw: bytes) -> dict:
+    """Decode an inbound request envelope into a dict with a decoded ``payload`` (bytes)."""
+    env = json.loads(raw.decode("utf-8")) if raw else {}
+    payload_b64 = env.get("payloadB64") or ""
+    env["payload"] = base64.b64decode(payload_b64) if payload_b64 else b""
+    return env
+
+
+def encode_response(correlation_id: str, payload: bytes, success: bool = True,
+                    error: str = None) -> bytes:
+    """Encode a response envelope to bytes."""
+    out = {
+        "success": success,
+        "correlationId": correlation_id,
+        "payloadB64": base64.b64encode(payload).decode("ascii") if payload else "",
+        "error": error,
+    }
+    return json.dumps(out).encode("utf-8")
+
+
+def encode_request(session_id: str, correlation_id: str, payload: bytes,
+                   push: bool = False, network_id: int = 0) -> bytes:
+    """Encode a request envelope (used by the load-test client)."""
+    out = {
+        "sessionId": session_id,
+        "correlationId": correlation_id,
+        "push": push,
+        "networkId": network_id,
+        "payloadB64": base64.b64encode(payload).decode("ascii") if payload else "",
+    }
+    return json.dumps(out).encode("utf-8")
+
+
+def decode_response(raw: bytes) -> dict:
+    env = json.loads(raw.decode("utf-8")) if raw else {}
+    payload_b64 = env.get("payloadB64") or ""
+    env["payload"] = base64.b64decode(payload_b64) if payload_b64 else b""
+    return env
+
+
+FULL_METHOD = "ussd.UssdApplicationService/Process"
+SERVICE_NAME = "ussd.UssdApplicationService"
+METHOD_NAME = "Process"

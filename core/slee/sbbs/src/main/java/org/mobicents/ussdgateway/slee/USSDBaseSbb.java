@@ -24,6 +24,7 @@ import javax.slee.CreateException;
 import javax.slee.RolledBackContext;
 import javax.slee.Sbb;
 import javax.slee.SbbContext;
+import javax.slee.SbbLocalObject;
 import javax.slee.facilities.Tracer;
 import javax.slee.resource.ResourceAdaptorTypeID;
 
@@ -45,11 +46,15 @@ import org.restcomm.protocols.ss7.map.api.service.supplementary.UnstructuredSSNo
 import org.restcomm.protocols.ss7.map.api.service.supplementary.UnstructuredSSRequest;
 import org.restcomm.protocols.ss7.map.api.service.supplementary.UnstructuredSSResponse;
 import org.mobicents.slee.SbbContextExt;
-import org.restcomm.slee.resource.jdbc.JdbcActivityContextInterfaceFactory;
-import org.restcomm.slee.resource.jdbc.JdbcResourceAdaptorSbbInterface;
+import org.mobicents.ussd.cdr.local.CdrLocalResourceAdaptorSbbInterface;
+import org.mobicents.ussd.cdr.local.CdrWriteRequest;
 import org.restcomm.slee.resource.map.MAPContextInterfaceFactory;
 import org.mobicents.ussdgateway.UssdStatAggregator;
 import org.mobicents.ussdgateway.XmlMAPDialog;
+import org.mobicents.ussdgateway.slee.cdr.CdrLineFormatter;
+import org.mobicents.ussdgateway.slee.cdr.ChargeInterface;
+import org.mobicents.ussdgateway.slee.cdr.RecordStatus;
+import org.mobicents.ussdgateway.slee.cdr.USSDCDRState;
 
 /**
  * Simple base SBB class. Its meant to have all the basics for GW SBBS(SLEE
@@ -85,12 +90,11 @@ public class USSDBaseSbb implements Sbb {
 	protected MAPParameterFactory mapParameterFactory;
 
 	// -------------------------------------------------------------
-	// JDBC RA STUFF
+	// CDR Local RA STUFF
 	// -------------------------------------------------------------
-	protected static final ResourceAdaptorTypeID JDBC_RESOURCE_ADAPTOR_ID = JdbcResourceAdaptorSbbInterface.RATYPE_ID;
-	protected static final String JDBC_RA_LINK = "JDBCRA";
-	protected JdbcResourceAdaptorSbbInterface jdbcRA;
-	protected JdbcActivityContextInterfaceFactory jdbcACIF;
+	protected static final ResourceAdaptorTypeID cdrLocalRATypeID = CdrLocalResourceAdaptorSbbInterface.RATYPE_ID;
+	protected static final String cdrLocalRaLink = "CdrLocalRA";
+	protected CdrLocalResourceAdaptorSbbInterface cdrLocalProvider;
 
 	// -------------------------------------------------------------
 	// HTTP Client RA STUFF
@@ -115,10 +119,87 @@ public class USSDBaseSbb implements Sbb {
 		this.loggerName = loggerName;
 	}
 
+	protected void initCdrLocalProvider() {
+		try {
+			this.cdrLocalProvider = (CdrLocalResourceAdaptorSbbInterface) this.sbbContext
+					.getResourceAdaptorInterface(cdrLocalRATypeID, cdrLocalRaLink);
+		} catch (Exception e) {
+			if (this.logger != null) {
+				this.logger.severe("Could not obtain CDR Local RA provider", e);
+			}
+		}
+	}
+
     // -------------------------------------------------------------
     // Statistics STUFF
     // -------------------------------------------------------------
     protected UssdStatAggregator ussdStatAggregator;
+
+    protected USSDCDRState localRaCdrState;
+
+    protected USSDCDRState getOrCreateLocalRaCdrState() {
+        if (localRaCdrState == null) {
+            localRaCdrState = new USSDCDRState();
+        }
+        return localRaCdrState;
+    }
+
+    protected ChargeInterface getLocalRaChargeInterface() {
+        return new LocalRaCdrStateHolder(getOrCreateLocalRaCdrState());
+    }
+
+    protected void attachCdrToActivity(ActivityContextInterface aci, ChargeInterface cdrInterface) {
+        aci.attach((SbbLocalObject) sbbContext.getSbbLocalObject());
+    }
+
+    protected void submitLocalRaCdr(RecordStatus recordStatus) {
+        USSDCDRState state = getOrCreateLocalRaCdrState();
+        if (!CdrLineFormatter.prepareRecord(state, recordStatus, logger)) {
+            return;
+        }
+        if (cdrLocalProvider != null) {
+            cdrLocalProvider.submit(new CdrWriteRequest(state.getId(), CdrLineFormatter.format(state)));
+        } else if (logger != null) {
+            logger.severe("CDR Local RA provider not available");
+        }
+    }
+
+    /**
+     * Submit a CDR record tagged with the bridge correlation id and phase. Both records of a
+     * bridged transaction (S1 release, S2 push) share the same {@code correlationId}.
+     */
+    protected void submitBridgeCdr(RecordStatus recordStatus, String correlationId, String bridgePhase) {
+        USSDCDRState state = getOrCreateLocalRaCdrState();
+        state.setCorrelationId(correlationId);
+        state.setBridgePhase(bridgePhase);
+        submitLocalRaCdr(recordStatus);
+    }
+
+    private static final class LocalRaCdrStateHolder implements ChargeInterface {
+        private final USSDCDRState state;
+
+        private LocalRaCdrStateHolder(USSDCDRState state) {
+            this.state = state;
+        }
+
+        @Override
+        public void init(boolean reset) {
+        }
+
+        @Override
+        public void setState(USSDCDRState state) {
+        }
+
+        @Override
+        public USSDCDRState getState() {
+            return state;
+        }
+
+        @Override
+        public void createRecord(RecordStatus outcome) {
+            throw new UnsupportedOperationException("Use submitLocalRaCdr() for LocalRa mode");
+        }
+    }
 
 	// -------------------------------------------------------------
 	// SLEE minimal STUFF
@@ -135,8 +216,7 @@ public class USSDBaseSbb implements Sbb {
         this.mapParameterFactory = null;
         this.ussdStatAggregator = null;
 
-		this.jdbcRA = null;
-		this.jdbcACIF = null;
+		this.cdrLocalProvider = null;
 
 		this.httpClientActivityContextInterfaceFactory = null;
 		this.httpClientProvider = null;

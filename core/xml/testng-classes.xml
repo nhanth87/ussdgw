@@ -7,6 +7,11 @@
 		<classes>
 			<class name="org.mobicents.ussdgateway.XmlMAPDialogTest"></class>
 			<class name="org.mobicents.ussdgateway.MpscMessageListTest"></class>
+			<class name="org.mobicents.ussdgateway.LegacyJavolutionMapDialogCompatibilityTest"></class>
+			<class name="org.mobicents.ussdgateway.XmlCompatibilityTest"></class>
+			<class name="org.mobicents.ussdgateway.CoreXmlCompatibilityTest"></class>
+			<class name="org.mobicents.ussdgateway.CompleteXmlCompatibilityTest"></class>
+			<class name="org.mobicents.ussdgateway.XmlDocumentationSamplesTest"></class>
 		</classes>
 	</test>
 

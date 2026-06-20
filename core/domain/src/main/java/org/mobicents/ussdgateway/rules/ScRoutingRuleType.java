@@ -26,5 +26,5 @@ package org.mobicents.ussdgateway.rules;
  *
  */
 public enum ScRoutingRuleType {
-    HTTP, SIP,
+    HTTP, SIP, GRPC,
 }

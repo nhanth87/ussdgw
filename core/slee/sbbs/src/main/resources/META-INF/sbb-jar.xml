@@ -23,6 +23,13 @@
 		</sbb-ref>
 
 		<sbb-ref>
+			<sbb-name>GrpcClientSbb</sbb-name>
+			<sbb-vendor>org.mobicents</sbb-vendor>
+			<sbb-version>1.0</sbb-version>
+			<sbb-alias>GrpcClientSbb</sbb-alias>
+		</sbb-ref>
+
+		<sbb-ref>
 			<sbb-name>SipSbb</sbb-name>
 			<sbb-vendor>org.mobicents</sbb-vendor>
 			<sbb-version>1.0</sbb-version>
@@ -41,6 +48,11 @@
 				<get-child-relation-method>
 					<sbb-alias-ref>HttpClientSbb</sbb-alias-ref>
 					<get-child-relation-method-name>getHttpClientSbb</get-child-relation-method-name>
+					<default-priority>0</default-priority>
+				</get-child-relation-method>
+				<get-child-relation-method>
+					<sbb-alias-ref>GrpcClientSbb</sbb-alias-ref>
+					<get-child-relation-method-name>getGrpcClientSbb</get-child-relation-method-name>
 					<default-priority>0</default-priority>
 				</get-child-relation-method>
 				<get-child-relation-method>
@@ -108,18 +120,6 @@
 			<library-vendor>org.mobicents</library-vendor>
 			<library-version>2.0</library-version>
 		</library-ref>
-        <sbb-ref>
-            <sbb-name>CDRSbb</sbb-name>
-            <sbb-vendor>org.mobicents</sbb-vendor>
-            <sbb-version>1.0</sbb-version>
-            <sbb-alias>CDRSbb</sbb-alias>
-        </sbb-ref>
-        <sbb-ref>
-            <sbb-name>CDRSbbPlain</sbb-name>
-            <sbb-vendor>org.mobicents</sbb-vendor>
-            <sbb-version>1.0</sbb-version>
-            <sbb-alias>CDRSbb_plain</sbb-alias>
-        </sbb-ref>
 		<sbb-classes>
 			<sbb-abstract-class reentrant="True">
 				<sbb-abstract-class-name>org.mobicents.ussdgateway.slee.http.HttpClientSbb</sbb-abstract-class-name>
@@ -145,16 +145,6 @@
 				<cmp-field>
 					<cmp-field-name>httpSessionId</cmp-field-name>
 				</cmp-field>
-				<get-child-relation-method>
-					<sbb-alias-ref>CDRSbb</sbb-alias-ref>
-					<get-child-relation-method-name>getCDRInterfaceChildRelation</get-child-relation-method-name>
-					<default-priority>0</default-priority>
-				</get-child-relation-method>
-                <get-child-relation-method>
-                    <sbb-alias-ref>CDRSbb_plain</sbb-alias-ref>
-                    <get-child-relation-method-name>getCDRPlainInterfaceChildRelation</get-child-relation-method-name>
-                    <default-priority>0</default-priority>
-                </get-child-relation-method>
 			</sbb-abstract-class>
 			<sbb-local-interface>
 				<sbb-local-interface-name>org.mobicents.ussdgateway.slee.http.HttpClientSbbLocalObject</sbb-local-interface-name>
@@ -337,6 +327,236 @@
 				<resource-adaptor-entity-link>MAPRA</resource-adaptor-entity-link>
 			</resource-adaptor-entity-binding>
 		</resource-adaptor-type-binding>
+		<resource-adaptor-type-binding>
+			<resource-adaptor-type-ref>
+				<resource-adaptor-type-name>CdrLocalResourceAdaptorType</resource-adaptor-type-name>
+				<resource-adaptor-type-vendor>org.mobicents.ussd</resource-adaptor-type-vendor>
+				<resource-adaptor-type-version>1.0</resource-adaptor-type-version>
+			</resource-adaptor-type-ref>
+			<resource-adaptor-entity-binding>
+				<resource-adaptor-object-name>slee/resources/cdr-local/sbbinterface</resource-adaptor-object-name>
+				<resource-adaptor-entity-link>CdrLocalRA</resource-adaptor-entity-link>
+			</resource-adaptor-entity-binding>
+		</resource-adaptor-type-binding>
+	</sbb>
+
+
+	<sbb id="ussd_gw_grpc">
+		<description>Represents the gRPC Client toward the Application Server</description>
+		<sbb-name>GrpcClientSbb</sbb-name>
+		<sbb-vendor>org.mobicents</sbb-vendor>
+		<sbb-version>1.0</sbb-version>
+		<sbb-alias>GrpcClientSbb</sbb-alias>
+		<library-ref>
+			<library-name>library-ussdgateway</library-name>
+			<library-vendor>org.mobicents</library-vendor>
+			<library-version>2.0</library-version>
+		</library-ref>
+		<sbb-classes>
+			<sbb-abstract-class reentrant="True">
+				<sbb-abstract-class-name>org.mobicents.ussdgateway.slee.grpc.GrpcClientSbb</sbb-abstract-class-name>
+				<cmp-field>
+					<cmp-field-name>call</cmp-field-name>
+				</cmp-field>
+				<cmp-field>
+					<cmp-field-name>xmlMAPDialog</cmp-field-name>
+				</cmp-field>
+				<cmp-field>
+					<cmp-field-name>processUnstructuredSSRequestInvokeId</cmp-field-name>
+				</cmp-field>
+				<cmp-field>
+					<cmp-field-name>timerID</cmp-field-name>
+				</cmp-field>
+				<cmp-field>
+					<cmp-field-name>userObject</cmp-field-name>
+				</cmp-field>
+				<cmp-field>
+					<cmp-field-name>finalMessageSent</cmp-field-name>
+				</cmp-field>
+				<cmp-field>
+					<cmp-field-name>httpSessionId</cmp-field-name>
+				</cmp-field>
+				<cmp-field>
+					<cmp-field-name>grpcCorrelationId</cmp-field-name>
+				</cmp-field>
+				<cmp-field>
+					<cmp-field-name>grpcPollCount</cmp-field-name>
+				</cmp-field>
+			</sbb-abstract-class>
+			<sbb-local-interface>
+				<sbb-local-interface-name>org.mobicents.ussdgateway.slee.grpc.GrpcClientSbbLocalObject</sbb-local-interface-name>
+			</sbb-local-interface>
+		</sbb-classes>
+
+		<event event-direction="Receive" initial-event="False">
+			<event-name>TimerEvent</event-name>
+			<event-type-ref>
+				<event-type-name>javax.slee.facilities.TimerEvent</event-type-name>
+				<event-type-vendor>javax.slee</event-type-vendor>
+				<event-type-version>1.0</event-type-version>
+			</event-type-ref>
+		</event>
+
+		<event event-direction="Receive" initial-event="False">
+			<event-name>ProcessUnstructuredSSRequest</event-name>
+			<event-type-ref>
+				<event-type-name>ss7.map.service.suplementary.PROCESS_UNSTRUCTURED_SS_REQUEST</event-type-name>
+				<event-type-vendor>org.restcomm</event-type-vendor>
+				<event-type-version>1.0</event-type-version>
+			</event-type-ref>
+		</event>
+
+		<event event-direction="Receive" initial-event="False">
+			<event-name>UnstructuredSSResponse</event-name>
+			<event-type-ref>
+				<event-type-name>ss7.map.service.suplementary.UNSTRUCTURED_SS_RESPONSE</event-type-name>
+				<event-type-vendor>org.restcomm</event-type-vendor>
+				<event-type-version>1.0</event-type-version>
+			</event-type-ref>
+		</event>
+
+		<event event-direction="Receive" initial-event="False">
+			<event-name>DialogDelimiter</event-name>
+			<event-type-ref>
+				<event-type-name>ss7.map.DIALOG_DELIMITER</event-type-name>
+				<event-type-vendor>org.restcomm</event-type-vendor>
+				<event-type-version>1.0</event-type-version>
+			</event-type-ref>
+		</event>
+
+		<event event-direction="Receive" initial-event="False">
+			<event-name>DialogAccept</event-name>
+			<event-type-ref>
+				<event-type-name>ss7.map.DIALOG_ACCEPT</event-type-name>
+				<event-type-vendor>org.restcomm</event-type-vendor>
+				<event-type-version>1.0</event-type-version>
+			</event-type-ref>
+		</event>
+
+		<event event-direction="Receive" initial-event="False">
+			<event-name>DialogReject</event-name>
+			<event-type-ref>
+				<event-type-name>ss7.map.DIALOG_REJECT</event-type-name>
+				<event-type-vendor>org.restcomm</event-type-vendor>
+				<event-type-version>1.0</event-type-version>
+			</event-type-ref>
+		</event>
+
+		<event event-direction="Receive" initial-event="False">
+			<event-name>DialogUserAbort</event-name>
+			<event-type-ref>
+				<event-type-name>ss7.map.DIALOG_USERABORT</event-type-name>
+				<event-type-vendor>org.restcomm</event-type-vendor>
+				<event-type-version>1.0</event-type-version>
+			</event-type-ref>
+		</event>
+
+		<event event-direction="Receive" initial-event="False">
+			<event-name>DialogProviderAbort</event-name>
+			<event-type-ref>
+				<event-type-name>ss7.map.DIALOG_PROVIDERABORT</event-type-name>
+				<event-type-vendor>org.restcomm</event-type-vendor>
+				<event-type-version>1.0</event-type-version>
+			</event-type-ref>
+		</event>
+
+		<event event-direction="Receive" initial-event="False">
+			<event-name>DialogClose</event-name>
+			<event-type-ref>
+				<event-type-name>ss7.map.DIALOG_CLOSE</event-type-name>
+				<event-type-vendor>org.restcomm</event-type-vendor>
+				<event-type-version>1.0</event-type-version>
+			</event-type-ref>
+		</event>
+
+		<event event-direction="Receive" initial-event="False">
+			<event-name>DialogNotice</event-name>
+			<event-type-ref>
+				<event-type-name>ss7.map.DIALOG_NOTICE</event-type-name>
+				<event-type-vendor>org.restcomm</event-type-vendor>
+				<event-type-version>1.0</event-type-version>
+			</event-type-ref>
+		</event>
+
+		<event event-direction="Receive" initial-event="False">
+			<event-name>DialogTimeout</event-name>
+			<event-type-ref>
+				<event-type-name>ss7.map.DIALOG_TIMEOUT</event-type-name>
+				<event-type-vendor>org.restcomm</event-type-vendor>
+				<event-type-version>1.0</event-type-version>
+			</event-type-ref>
+		</event>
+
+		<event event-direction="Receive" initial-event="False">
+			<event-name>InvokeTimeout</event-name>
+			<event-type-ref>
+				<event-type-name>ss7.map.INVOKE_TIMEOUT</event-type-name>
+				<event-type-vendor>org.restcomm</event-type-vendor>
+				<event-type-version>1.0</event-type-version>
+			</event-type-ref>
+		</event>
+
+		<event event-direction="Receive" initial-event="False">
+			<event-name>ErrorComponent</event-name>
+			<event-type-ref>
+				<event-type-name>ss7.map.ERROR_COMPONENT</event-type-name>
+				<event-type-vendor>org.restcomm</event-type-vendor>
+				<event-type-version>1.0</event-type-version>
+			</event-type-ref>
+		</event>
+
+		<event event-direction="Receive" initial-event="False">
+			<event-name>RejectComponent</event-name>
+			<event-type-ref>
+				<event-type-name>ss7.map.REJECT_COMPONENT</event-type-name>
+				<event-type-vendor>org.restcomm</event-type-vendor>
+				<event-type-version>1.0</event-type-version>
+			</event-type-ref>
+		</event>
+
+		<event event-direction="Receive" initial-event="False">
+			<event-name>DialogRelease</event-name>
+			<event-type-ref>
+				<event-type-name>ss7.map.DIALOG_RELEASE</event-type-name>
+				<event-type-vendor>org.restcomm</event-type-vendor>
+				<event-type-version>1.0</event-type-version>
+			</event-type-ref>
+		</event>
+
+		<resource-adaptor-type-binding>
+			<resource-adaptor-type-ref>
+				<resource-adaptor-type-name>MAPResourceAdaptorType</resource-adaptor-type-name>
+				<resource-adaptor-type-vendor>org.restcomm</resource-adaptor-type-vendor>
+				<resource-adaptor-type-version>2.0</resource-adaptor-type-version>
+			</resource-adaptor-type-ref>
+			<activity-context-interface-factory-name>slee/resources/map/2.0/acifactory</activity-context-interface-factory-name>
+			<resource-adaptor-entity-binding>
+				<resource-adaptor-object-name>slee/resources/map/2.0/provider</resource-adaptor-object-name>
+				<resource-adaptor-entity-link>MAPRA</resource-adaptor-entity-link>
+			</resource-adaptor-entity-binding>
+		</resource-adaptor-type-binding>
+		<resource-adaptor-type-binding>
+			<resource-adaptor-type-ref>
+				<resource-adaptor-type-name>CdrLocalResourceAdaptorType</resource-adaptor-type-name>
+				<resource-adaptor-type-vendor>org.mobicents.ussd</resource-adaptor-type-vendor>
+				<resource-adaptor-type-version>1.0</resource-adaptor-type-version>
+			</resource-adaptor-type-ref>
+			<resource-adaptor-entity-binding>
+				<resource-adaptor-object-name>slee/resources/cdr-local/sbbinterface</resource-adaptor-object-name>
+				<resource-adaptor-entity-link>CdrLocalRA</resource-adaptor-entity-link>
+			</resource-adaptor-entity-binding>
+		</resource-adaptor-type-binding>
+		<resource-adaptor-type-binding>
+			<resource-adaptor-type-ref>
+				<resource-adaptor-type-name>GrpcAsResourceAdaptorType</resource-adaptor-type-name>
+				<resource-adaptor-type-vendor>org.mobicents.ussd</resource-adaptor-type-vendor>
+				<resource-adaptor-type-version>1.0</resource-adaptor-type-version>
+			</resource-adaptor-type-ref>
+			<resource-adaptor-entity-binding>
+				<resource-adaptor-object-name>slee/resources/grpc-as/sbbinterface</resource-adaptor-object-name>
+				<resource-adaptor-entity-link>GrpcAsRA</resource-adaptor-entity-link>
+			</resource-adaptor-entity-binding>
+		</resource-adaptor-type-binding>
 	</sbb>
 
 
@@ -351,19 +571,6 @@
 			<library-vendor>org.mobicents</library-vendor>
 			<library-version>2.0</library-version>
 		</library-ref>
-		<sbb-ref>
-			<sbb-name>CDRSbb</sbb-name>
-			<sbb-vendor>org.mobicents</sbb-vendor>
-			<sbb-version>1.0</sbb-version>
-			<sbb-alias>CDRSbb</sbb-alias>
-		</sbb-ref>
-        <sbb-ref>
-            <sbb-name>CDRSbbPlain</sbb-name>
-            <sbb-vendor>org.mobicents</sbb-vendor>
-            <sbb-version>1.0</sbb-version>
-            <sbb-alias>CDRSbb_plain</sbb-alias>
-        </sbb-ref>
-
 		<sbb-classes>
 			<sbb-abstract-class>
 				<sbb-abstract-class-name>
@@ -391,16 +598,6 @@
 				<cmp-field>
 					<cmp-field-name>httpSessionId</cmp-field-name>
 				</cmp-field>
-				<get-child-relation-method>
-					<sbb-alias-ref>CDRSbb</sbb-alias-ref>
-					<get-child-relation-method-name>getCDRInterfaceChildRelation</get-child-relation-method-name>
-					<default-priority>0</default-priority>
-				</get-child-relation-method>
-                <get-child-relation-method>
-                    <sbb-alias-ref>CDRSbb_plain</sbb-alias-ref>
-                    <get-child-relation-method-name>getCDRPlainInterfaceChildRelation</get-child-relation-method-name>
-                    <default-priority>0</default-priority>
-                </get-child-relation-method>
 			</sbb-abstract-class>
 			<sbb-local-interface>
 				<sbb-local-interface-name>
@@ -661,124 +858,17 @@
 				<resource-adaptor-entity-link>MAPRA</resource-adaptor-entity-link>
 			</resource-adaptor-entity-binding>
 		</resource-adaptor-type-binding>
-	</sbb>
-
-
-	<sbb id="ussd_gw_cdr">
-		<description>SBB which exposes stateles interface to allow CDR
-			generation.</description>
-		<sbb-name>CDRSbb</sbb-name>
-		<sbb-vendor>org.mobicents</sbb-vendor>
-		<sbb-version>1.0</sbb-version>
-		<sbb-alias>CDRSbb</sbb-alias>
-
-
-		<sbb-classes>
-			<sbb-abstract-class>
-				<sbb-abstract-class-name>org.mobicents.ussdgateway.slee.cdr.jdbc.CDRGeneratorSbb</sbb-abstract-class-name>
-				<cmp-field>
-					<cmp-field-name>uSSDCDRState</cmp-field-name>
-				</cmp-field>
-			</sbb-abstract-class>
-			<sbb-local-interface>
-				<sbb-local-interface-name>org.mobicents.ussdgateway.slee.cdr.ChargeSBBLocalObject</sbb-local-interface-name>
-			</sbb-local-interface>
-		</sbb-classes>
-
-		<event event-direction="Receive" initial-event="False">
-			<event-name>SimpleJdbcTaskResultEvent</event-name>
-			<event-type-ref>
-				<event-type-name>SimpleJdbcTaskResultEvent</event-type-name>
-				<event-type-vendor>org.restcomm</event-type-vendor>
-				<event-type-version>1.0</event-type-version>
-			</event-type-ref>
-		</event>
-
-		<event event-direction="Receive" initial-event="False">
-			<event-name>JdbcTaskExecutionThrowableEvent</event-name>
-			<event-type-ref>
-				<event-type-name>JdbcTaskExecutionThrowableEvent</event-type-name>
-				<event-type-vendor>org.restcomm</event-type-vendor>
-				<event-type-version>1.0</event-type-version>
-			</event-type-ref>
-		</event>
-
-		<event event-direction="Receive" initial-event="True">
-			<event-name>StartServiceEvent</event-name>
-			<event-type-ref>
-				<event-type-name>
-					javax.slee.serviceactivity.ServiceStartedEvent
-				</event-type-name>
-				<event-type-vendor>javax.slee</event-type-vendor>
-				<event-type-version>1.1</event-type-version>
-			</event-type-ref>
-			<initial-event-select variable="ActivityContext" />
-		</event>
-
-		<env-entry>
-			<env-entry-name>reset</env-entry-name>
-			<env-entry-type>java.lang.Boolean</env-entry-type>
-			<env-entry-value>true</env-entry-value>
-		</env-entry>
-
 		<resource-adaptor-type-binding>
 			<resource-adaptor-type-ref>
-				<resource-adaptor-type-name>
-					JDBCResourceAdaptorType
-				</resource-adaptor-type-name>
-				<resource-adaptor-type-vendor>
-					org.restcomm
-				</resource-adaptor-type-vendor>
-				<resource-adaptor-type-version>
-					1.0
-				</resource-adaptor-type-version>
+				<resource-adaptor-type-name>CdrLocalResourceAdaptorType</resource-adaptor-type-name>
+				<resource-adaptor-type-vendor>org.mobicents.ussd</resource-adaptor-type-vendor>
+				<resource-adaptor-type-version>1.0</resource-adaptor-type-version>
 			</resource-adaptor-type-ref>
-			<activity-context-interface-factory-name>
-				slee/ra/jdbc/1.0/acifactory
-			</activity-context-interface-factory-name>
 			<resource-adaptor-entity-binding>
-				<resource-adaptor-object-name>
-					slee/ra/jdbc/1.0/sbbinterface
-				</resource-adaptor-object-name>
-				<resource-adaptor-entity-link>
-					JDBCRA
-				</resource-adaptor-entity-link>
+				<resource-adaptor-object-name>slee/resources/cdr-local/sbbinterface</resource-adaptor-object-name>
+				<resource-adaptor-entity-link>CdrLocalRA</resource-adaptor-entity-link>
 			</resource-adaptor-entity-binding>
 		</resource-adaptor-type-binding>
-	</sbb>
-
-
-	<sbb id="ussd_gw_cdr_plain">
-		<description>SBB which exposes stateles interface to allow CDR
-			generation. This SBB logs cdrs into tracer facitlity</description>
-		<sbb-name>CDRSbbPlain</sbb-name>
-		<sbb-vendor>org.mobicents</sbb-vendor>
-		<sbb-version>1.0</sbb-version>
-		<sbb-alias>CDRSbb_plain</sbb-alias>
-
-
-		<sbb-classes>
-			<sbb-abstract-class>
-				<sbb-abstract-class-name>org.mobicents.ussdgateway.slee.cdr.plain.CDRGeneratorSbb</sbb-abstract-class-name>
-				<cmp-field>
-					<cmp-field-name>uSSDCDRState</cmp-field-name>
-				</cmp-field>
-			</sbb-abstract-class>
-			<sbb-local-interface>
-				<sbb-local-interface-name>org.mobicents.ussdgateway.slee.cdr.ChargeSBBLocalObject</sbb-local-interface-name>
-			</sbb-local-interface>
-		</sbb-classes>
-		<event event-direction="Receive" initial-event="True">
-			<event-name>StartServiceEvent</event-name>
-			<event-type-ref>
-				<event-type-name>
-					javax.slee.serviceactivity.ServiceStartedEvent
-				</event-type-name>
-				<event-type-vendor>javax.slee</event-type-vendor>
-				<event-type-version>1.1</event-type-version>
-			</event-type-ref>
-			<initial-event-select variable="ActivityContext" />
-		</event>
 	</sbb>
 
 
@@ -797,19 +887,6 @@
 			<sbb-version>1.0</sbb-version>
 			<sbb-alias>SriSbb</sbb-alias>
 		</sbb-ref>
-		<sbb-ref>
-			<sbb-name>CDRSbb</sbb-name>
-			<sbb-vendor>org.mobicents</sbb-vendor>
-			<sbb-version>1.0</sbb-version>
-			<sbb-alias>CDRSbb</sbb-alias>
-		</sbb-ref>
-        <sbb-ref>
-            <sbb-name>CDRSbbPlain</sbb-name>
-            <sbb-vendor>org.mobicents</sbb-vendor>
-            <sbb-version>1.0</sbb-version>
-            <sbb-alias>CDRSbb_plain</sbb-alias>
-        </sbb-ref>
-
 		<sbb-classes>
 			<sbb-abstract-class>
 				<sbb-abstract-class-name>org.mobicents.ussdgateway.slee.http.HttpServerSbb</sbb-abstract-class-name>
@@ -851,16 +928,6 @@
 					<get-child-relation-method-name>getSriSbbChildRelation</get-child-relation-method-name>
 					<default-priority>0</default-priority>
 				</get-child-relation-method>
-				<get-child-relation-method>
-					<sbb-alias-ref>CDRSbb</sbb-alias-ref>
-					<get-child-relation-method-name>getCDRInterfaceChildRelation</get-child-relation-method-name>
-					<default-priority>0</default-priority>
-				</get-child-relation-method>				
-                <get-child-relation-method>
-                    <sbb-alias-ref>CDRSbb_plain</sbb-alias-ref>
-                    <get-child-relation-method-name>getCDRPlainInterfaceChildRelation</get-child-relation-method-name>
-                    <default-priority>0</default-priority>
-                </get-child-relation-method>
 			</sbb-abstract-class>
 			<sbb-local-interface>
 				<sbb-local-interface-name>org.mobicents.ussdgateway.slee.http.HttpServerSbbLocalObject</sbb-local-interface-name>
@@ -1147,6 +1214,17 @@
 				<resource-adaptor-entity-link>HttpServletRA</resource-adaptor-entity-link>
 			</resource-adaptor-entity-binding>
 		</resource-adaptor-type-binding>
+		<resource-adaptor-type-binding>
+			<resource-adaptor-type-ref>
+				<resource-adaptor-type-name>CdrLocalResourceAdaptorType</resource-adaptor-type-name>
+				<resource-adaptor-type-vendor>org.mobicents.ussd</resource-adaptor-type-vendor>
+				<resource-adaptor-type-version>1.0</resource-adaptor-type-version>
+			</resource-adaptor-type-ref>
+			<resource-adaptor-entity-binding>
+				<resource-adaptor-object-name>slee/resources/cdr-local/sbbinterface</resource-adaptor-object-name>
+				<resource-adaptor-entity-link>CdrLocalRA</resource-adaptor-entity-link>
+			</resource-adaptor-entity-binding>
+		</resource-adaptor-type-binding>
 	</sbb>
 
 
@@ -1165,19 +1243,6 @@
 			<sbb-version>1.0</sbb-version>
 			<sbb-alias>SriSbb</sbb-alias>
 		</sbb-ref>
-        <sbb-ref>
-            <sbb-name>CDRSbb</sbb-name>
-            <sbb-vendor>org.mobicents</sbb-vendor>
-            <sbb-version>1.0</sbb-version>
-            <sbb-alias>CDRSbb</sbb-alias>
-        </sbb-ref>
-        <sbb-ref>
-            <sbb-name>CDRSbbPlain</sbb-name>
-            <sbb-vendor>org.mobicents</sbb-vendor>
-            <sbb-version>1.0</sbb-version>
-            <sbb-alias>CDRSbb_plain</sbb-alias>
-        </sbb-ref>
-
 		<sbb-classes>
 			<sbb-abstract-class>
 				<sbb-abstract-class-name>org.mobicents.ussdgateway.slee.sip.SipServerSbb</sbb-abstract-class-name>
@@ -1216,16 +1281,6 @@
 					<get-child-relation-method-name>getSriSbbChildRelation</get-child-relation-method-name>
 					<default-priority>0</default-priority>
 				</get-child-relation-method>
-                <get-child-relation-method>
-                    <sbb-alias-ref>CDRSbb</sbb-alias-ref>
-                    <get-child-relation-method-name>getCDRInterfaceChildRelation</get-child-relation-method-name>
-                    <default-priority>0</default-priority>
-                </get-child-relation-method>
-                <get-child-relation-method>
-                    <sbb-alias-ref>CDRSbb_plain</sbb-alias-ref>
-                    <get-child-relation-method-name>getCDRPlainInterfaceChildRelation</get-child-relation-method-name>
-                    <default-priority>0</default-priority>
-                </get-child-relation-method>
 			</sbb-abstract-class>
 			<sbb-local-interface>
 				<sbb-local-interface-name>org.mobicents.ussdgateway.slee.sip.SipServerSbbLocalObject</sbb-local-interface-name>
@@ -1470,6 +1525,17 @@
 			<resource-adaptor-entity-binding>
 				<resource-adaptor-object-name>slee/resources/jainsip/1.2/provider</resource-adaptor-object-name>
 				<resource-adaptor-entity-link>SipRA</resource-adaptor-entity-link>
+			</resource-adaptor-entity-binding>
+		</resource-adaptor-type-binding>
+		<resource-adaptor-type-binding>
+			<resource-adaptor-type-ref>
+				<resource-adaptor-type-name>CdrLocalResourceAdaptorType</resource-adaptor-type-name>
+				<resource-adaptor-type-vendor>org.mobicents.ussd</resource-adaptor-type-vendor>
+				<resource-adaptor-type-version>1.0</resource-adaptor-type-version>
+			</resource-adaptor-type-ref>
+			<resource-adaptor-entity-binding>
+				<resource-adaptor-object-name>slee/resources/cdr-local/sbbinterface</resource-adaptor-object-name>
+				<resource-adaptor-entity-link>CdrLocalRA</resource-adaptor-entity-link>
 			</resource-adaptor-entity-binding>
 		</resource-adaptor-type-binding>
 	</sbb>

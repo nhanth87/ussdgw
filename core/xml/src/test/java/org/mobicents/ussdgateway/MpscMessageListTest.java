@@ -289,7 +289,8 @@ public class MpscMessageListTest {
         }, "MPSC-TestDrainer");
         drainer.start();
 
-        assertTrue(drainer.join(30_000), "drainer should have finished in 30s");
+        drainer.join(30_000);
+        assertFalse(drainer.isAlive(), "drainer should have finished in 30s");
         if (drainerError.get() != null) {
             throw new AssertionError("drainer failed", drainerError.get());
         }

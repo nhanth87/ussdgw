@@ -95,4 +95,30 @@ public interface UssdPropertiesManagementMBean {
 
     public void setMaxActivityCount(int maxActivityCount);
 
+    // ----- Virtual Session Bridge -----
+
+    public boolean isSessionBridgeEnabled();
+
+    public void setSessionBridgeEnabled(boolean sessionBridgeEnabled);
+
+    public long getAsyncGateTimeoutMs();
+
+    public void setAsyncGateTimeoutMs(long asyncGateTimeoutMs);
+
+    public String getAsyncWaitUserMessage();
+
+    public void setAsyncWaitUserMessage(String asyncWaitUserMessage);
+
+    public String getAsyncHardFailMessage();
+
+    public void setAsyncHardFailMessage(String asyncHardFailMessage);
+
+    public int getBridgeStateTtlSec();
+
+    public void setBridgeStateTtlSec(int bridgeStateTtlSec);
+
+    public String getPushRetryDelaysMs();
+
+    public void setPushRetryDelaysMs(String pushRetryDelaysMs);
+
 }

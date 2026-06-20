@@ -139,6 +139,17 @@ public abstract class ParentSbb extends USSDBaseSbb {
 						child.setXmlMAPDialog(this.getDialog());
 						forwardEvent(child, aci);
 					}
+				} else if (call.getRuleType() == ScRoutingRuleType.GRPC) {
+					super.ussdStatAggregator.updateDialogsHttpEstablished();
+
+					// Create child of gRPC SBB and call local method
+					ChildRelation relation = this.getGrpcClientSbb();
+					if (relation.isEmpty()) {
+						ChildSbbLocalObject child = (ChildSbbLocalObject) relation.create();
+						child.setCallFact(call);
+						child.setXmlMAPDialog(this.getDialog());
+						forwardEvent(child, aci);
+					}
 				} else {
                     super.ussdStatAggregator.updateDialogsSipEstablished();
 
@@ -196,6 +207,8 @@ public abstract class ParentSbb extends USSDBaseSbb {
 	}
 
 	public abstract ChildRelation getHttpClientSbb();
+
+	public abstract ChildRelation getGrpcClientSbb();
 
 	public abstract ChildRelation getSipSbb();
 

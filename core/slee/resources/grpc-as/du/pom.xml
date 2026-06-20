@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.mobicents.ussd</groupId>
+        <artifactId>ussd-grpc-as-ra</artifactId>
+        <version>7.2.1-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>ussd-grpc-as-ra-DU</artifactId>
+    <name>Core : SLEE : gRPC AS RA : DU</name>
+
+    <dependencies>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>ussd-grpc-as-ra-library</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>ussd-grpc-as-ra-ratype</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>ussd-grpc-as-ra-ra</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.mobicents.tools</groupId>
+                <artifactId>maven-du-plugin</artifactId>
+                <version>4.0.2</version>
+                <configuration>
+                    <excludeTransitive>false</excludeTransitive>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                            <goal>generate-descriptor</goal>
+                            <goal>generate-ant-management-script</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -294,7 +294,23 @@ super.ussdStatAggregator.updateUssdNotifyOperations();
 
 	private void doPost(HttpClientActivity httpClientActivity, String url, byte[] content) {
 
-		HttpPost uriRequest = createRequest(url, null, ACCEPTED_CONTENT_TYPE, null);
+		// Virtual Session Bridge: propagate correlation/request ids so the AS can echo them on an
+		// asynchronous callback. Headers are only added when the feature flag is on.
+		Header[] correlationHeaders = null;
+		org.mobicents.ussdgateway.slee.SessionBridgeSupport bridge =
+				org.mobicents.ussdgateway.slee.SessionBridgeSupport.getInstance();
+		if (bridge.isEnabled()) {
+			String correlationId = getOrCreateLocalRaCdrState().getCorrelationId();
+			if (correlationId != null) {
+				String requestId = bridge.requestIdFor(correlationId);
+				correlationHeaders = new Header[] {
+						new BasicHeader("X-Ussd-Correlation-Id", correlationId),
+						new BasicHeader("X-Ussd-Request-Id", requestId == null ? correlationId : requestId)
+				};
+			}
+		}
+
+		HttpPost uriRequest = createRequest(url, null, ACCEPTED_CONTENT_TYPE, correlationHeaders);
 		pushContent(uriRequest, ACCEPTED_CONTENT_TYPE, CONTENT_ENCODING, content);
 
 		MAPDialogSupplementary mapDialog = this.getMAPDialog();

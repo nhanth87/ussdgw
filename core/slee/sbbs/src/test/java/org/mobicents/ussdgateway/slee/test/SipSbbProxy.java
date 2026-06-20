@@ -90,12 +90,6 @@ public class SipSbbProxy extends SipClientSbb {
 
 
     @Override
-    public ChildRelationExt getCDRInterfaceChildRelation() {
-        // TODO Auto-generated method stub
-        return null;
-    }
-
-    @Override
     public void setCall(ScRoutingRule call) {
         // TODO Auto-generated method stub
         
@@ -174,12 +168,6 @@ public class SipSbbProxy extends SipClientSbb {
 
     @Override
     public String getHttpSessionId() {
-        // TODO Auto-generated method stub
-        return null;
-    }
-
-    @Override
-    public ChildRelationExt getCDRPlainInterfaceChildRelation() {
         // TODO Auto-generated method stub
         return null;
     }

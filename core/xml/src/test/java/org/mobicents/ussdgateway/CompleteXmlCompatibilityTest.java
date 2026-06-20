@@ -54,6 +54,8 @@ public class CompleteXmlCompatibilityTest {
         assertEquals(msg.getMSISDNAddressString().getAddress(), "1234567890");
         assertEquals(msg.getMSISDNAddressString().getAddressNature().toString(), "international_number");
         assertEquals(msg.getMSISDNAddressString().getNumberingPlan().toString(), "ISDN");
+        assertNotNull(msg.getUSSDString());
+        assertEquals(msg.getUSSDString().getString(null), "*100#");
     }
 
     @Test
@@ -827,6 +829,7 @@ public class CompleteXmlCompatibilityTest {
         XmlMAPDialog deserialized = factory.deserialize(bytes);
         
         assertNotNull(deserialized);
+        assertEquals(deserialized.getMAPMessages().size(), 3);
         System.out.println("Round-trip multiple messages - size: " + deserialized.getMAPMessages().size());
     }
 }
