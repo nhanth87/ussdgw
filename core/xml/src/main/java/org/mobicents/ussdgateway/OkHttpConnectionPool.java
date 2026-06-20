@@ -44,6 +44,11 @@ import okhttp3.OkHttpClient;
  * 
  * @author USSD Gateway Team
  */
+/**
+ * @deprecated Use Http Client RA {@link org.restcomm.client.slee.resource.http.AdaptiveOkHttpClientFactory}
+ *             instead. Outbound HTTP pooling is owned by jain-slee-http-okhttp RA.
+ */
+@Deprecated
 public class OkHttpConnectionPool {
 
     // HIGH PERFORMANCE: 100k connections for bulk data processing

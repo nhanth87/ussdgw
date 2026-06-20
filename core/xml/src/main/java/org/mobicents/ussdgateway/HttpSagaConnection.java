@@ -54,6 +54,10 @@ import okhttp3.Response;
  * 
  * @author USSD Gateway Team
  */
+/**
+ * @deprecated Use Http Client RA async outbound path instead of local OkHttp singleton.
+ */
+@Deprecated
 public class HttpSagaConnection {
 
     // Retry configuration

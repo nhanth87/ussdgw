@@ -33,6 +33,12 @@
 			<artifactId>jackson-dataformat-xml</artifactId>
 			<version>2.15.2</version>
 		</dependency>
+		<!-- Woodstox StAX provider - required by JacksonXmlSerializer for writeRaw() / INDENT_OUTPUT support -->
+		<dependency>
+			<groupId>com.fasterxml.woodstox</groupId>
+			<artifactId>woodstox-core</artifactId>
+			<version>6.5.1</version>
+		</dependency>
 		<dependency>
 			<groupId>com.fasterxml.jackson.core</groupId>
 			<artifactId>jackson-databind</artifactId>
@@ -75,7 +81,13 @@
 			<artifactId>sccp-impl</artifactId>
 			<groupId>org.restcomm.protocols.ss7.sccp</groupId>
 			<version>${jss7.restcomm.version}</version>
-		</dependency>		
+		</dependency>
+		<!-- JCTools - lock-free MPSC queue for high-throughput producer/consumer hot paths -->
+		<dependency>
+			<groupId>org.jctools</groupId>
+			<artifactId>jctools-core</artifactId>
+			<version>4.0.5</version>
+		</dependency>
 	</dependencies>
 
 	<build>

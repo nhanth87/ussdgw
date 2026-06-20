@@ -45,17 +45,23 @@ import org.restcomm.protocols.ss7.map.api.errors.MAPErrorMessageUnauthorizedLCSC
 import org.restcomm.protocols.ss7.map.api.errors.MAPErrorMessageUnknownSubscriber;
 
 import java.util.Map;
-import java.util.HashMap;
-import java.util.Collections;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
+ * Thread-safe MAP error component map.
+ *
+ * <p>Originally backed by {@code javolution.util.FastMap} (not thread-safe). The migration
+ * to {@link ConcurrentHashMap} provides wait-free reads and lock-striped writes so the
+ * SBB event handlers can safely update the map while the dialog serializer iterates
+ * over its contents.</p>
+ *
  * @author Amit Bhayani
  * @author sergey vetyutnev
  * @author Matrix Agent
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class ErrorComponentMap extends HashMap<String, MAPErrorMessage> {
+public class ErrorComponentMap extends ConcurrentHashMap<String, MAPErrorMessage> {
 
     public static final String MAP_ERROR_EXT_CONTAINER = MAPErrorMessageExtensionContainer.class.getSimpleName();
     public static final String MAP_ERROR_SM_DEL_FAILURE = MAPErrorMessageSMDeliveryFailure.class.getSimpleName();
@@ -82,11 +88,14 @@ public class ErrorComponentMap extends HashMap<String, MAPErrorMessage> {
 
     @JsonIgnore
     public Map<Long, MAPErrorMessage> getErrorComponents() {
-        Map<Long, MAPErrorMessage> result = new HashMap<>();
+        // entrySet() view of ConcurrentHashMap is weakly consistent and safe to iterate
+        // even if the map is mutated concurrently. We use a plain HashMap to assemble
+        // the typed view because it is published via Collections.unmodifiableMap.
+        Map<Long, MAPErrorMessage> result = new java.util.HashMap<>(size());
         for (Map.Entry<String, MAPErrorMessage> entry : entrySet()) {
             result.put(Long.valueOf(entry.getKey().substring(2)), entry.getValue());
         }
-        return Collections.unmodifiableMap(result);
+        return java.util.Collections.unmodifiableMap(result);
     }
 
     @Override

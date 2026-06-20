@@ -509,6 +509,11 @@ public class EventsSerializeFactory {
         java.util.List<com.fasterxml.jackson.databind.node.ObjectNode> messageWrappers = new java.util.ArrayList<>();
         java.util.List<com.fasterxml.jackson.databind.node.ObjectNode> errorWrappers = new java.util.ArrayList<>();
         java.util.List<com.fasterxml.jackson.databind.node.ObjectNode> rejectWrappers = new java.util.ArrayList<>();
+        // Collected (invokeId, entry) pairs for the javolution flat format
+        // (<errComponents><id6><MAPErrorMessage.../></id6>...</errComponents>) so we
+        // can attach them to the dialog after the standard fields are deserialized.
+        java.util.List<java.util.Map.Entry<Long, MAPErrorMessage>> errComponentsToApply = new java.util.ArrayList<>();
+        java.util.List<java.util.Map.Entry<Long, Problem>> rejectComponentsToApply = new java.util.ArrayList<>();
         
         int processedFields = 0;
         int mapMessageCount = 0;
@@ -562,6 +567,69 @@ public class EventsSerializeFactory {
                         rejectWrappers.add((com.fasterxml.jackson.databind.node.ObjectNode) item);
                     }
                 }
+            } else if ("errComponents".equals(fieldName) && value.isObject() && value.size() > 0) {
+                // Javolution flat format: <errComponents><id6><MAPErrorMessageAbsentSubscriber.../></id6>...</errComponents>
+                // Each child key is "id<invokeId>" and the value is {<TypeAlias>: <fields>}.
+                logger.info("JENNY-DESERIALIZE-FIELD: Found errComponents object with {} entries", value.size());
+                java.util.Iterator<java.util.Map.Entry<String, JsonNode>> errIt = value.fields();
+                while (errIt.hasNext()) {
+                    java.util.Map.Entry<String, JsonNode> entry = errIt.next();
+                    String key = entry.getKey();
+                    JsonNode errWrapper = entry.getValue();
+                    if (key == null || !key.startsWith("id") || !errWrapper.isObject()) {
+                        continue;
+                    }
+                    java.util.Iterator<String> innerFields = errWrapper.fieldNames();
+                    while (innerFields.hasNext()) {
+                        String typeName = innerFields.next();
+                        Class<?> errClazz = aliasToClass.get(typeName);
+                        if (errClazz != null && MAPErrorMessage.class.isAssignableFrom(errClazz)) {
+                            try {
+                                Long invokeId = Long.valueOf(key.substring(2));
+                                // MAPErrorMessage's @JsonTypeInfo(WRAPPER_OBJECT) requires the
+                                // JsonNode passed to treeToValue to be a wrapper object keyed
+                                // by the type alias. errWrapper already has that shape; we
+                                // just need to strip the @ prefix from XML attributes.
+                                JsonNode normalized = normalizeXmlAttributes(errWrapper);
+                                MAPErrorMessage err = (MAPErrorMessage) xmlMapper.treeToValue(normalized, errClazz);
+                                if (err != null) {
+                                    errComponentsToApply.add(new java.util.AbstractMap.SimpleEntry<>(invokeId, err));
+                                }
+                            } catch (Exception ex) {
+                                logger.error("JENNY-DESERIALIZE-ERRCOMP-ERROR: key={} type={}", key, typeName, ex);
+                                addDeserializationError(typeName, ex.getMessage());
+                            }
+                        }
+                    }
+                }
+            } else if ("rejectComponents".equals(fieldName) && value.isObject() && value.size() > 0) {
+                // Javolution flat format: <rejectComponents><id2><stringValue>...</stringValue>...</id2></rejectComponents>
+                // The value of each child is the direct fields of ProblemImpl (no inner type alias).
+                logger.info("JENNY-DESERIALIZE-FIELD: Found rejectComponents object with {} entries", value.size());
+                Class<?> problemClazz = aliasToClass.get("Problem");
+                if (problemClazz == null) {
+                    problemClazz = ProblemImpl.class;
+                }
+                java.util.Iterator<java.util.Map.Entry<String, JsonNode>> rejIt = value.fields();
+                while (rejIt.hasNext()) {
+                    java.util.Map.Entry<String, JsonNode> entry = rejIt.next();
+                    String key = entry.getKey();
+                    JsonNode rejValue = entry.getValue();
+                    if (key == null || !key.startsWith("id") || !rejValue.isObject()) {
+                        continue;
+                    }
+                    try {
+                        Long invokeId = Long.valueOf(key.substring(2));
+                        JsonNode normalized = normalizeXmlAttributes(rejValue);
+                        Problem problem = (Problem) xmlMapper.treeToValue(normalized, problemClazz);
+                        if (problem != null) {
+                            rejectComponentsToApply.add(new java.util.AbstractMap.SimpleEntry<>(invokeId, problem));
+                        }
+                    } catch (Exception ex) {
+                        logger.error("JENNY-DESERIALIZE-REJCOMP-ERROR: key={}", key, ex);
+                        addDeserializationError("Problem", ex.getMessage());
+                    }
+                }
             } else {
                 // Handle errComponents / rejectComponents empty tags in javolution format
                 if ("errComponents".equals(fieldName) || "rejectComponents".equals(fieldName)) {
@@ -592,6 +660,25 @@ public class EventsSerializeFactory {
         } catch (Exception e) {
             logger.error("JENNY-DESERIALIZE-TREE-TO-VALUE-ERROR: {} - {}", e.getClass().getSimpleName(), e.getMessage(), e);
             dialog = new XmlMAPDialog();
+        }
+
+        // Apply the error / reject components collected from the javolution flat
+        // format. These are attached after the dialog is built because
+        // sendErrorComponent / sendRejectComponent are the only public path into
+        // the private maps and they require a non-null dialog.
+        for (java.util.Map.Entry<Long, MAPErrorMessage> e : errComponentsToApply) {
+            try {
+                dialog.sendErrorComponent(e.getKey(), e.getValue());
+            } catch (org.restcomm.protocols.ss7.map.api.MAPException mex) {
+                logger.error("JENNY-DESERIALIZE-ERRCOMP-APPLY-ERROR: invokeId={}", e.getKey(), mex);
+            }
+        }
+        for (java.util.Map.Entry<Long, Problem> e : rejectComponentsToApply) {
+            try {
+                dialog.sendRejectComponent(e.getKey(), e.getValue());
+            } catch (org.restcomm.protocols.ss7.map.api.MAPException mex) {
+                logger.error("JENNY-DESERIALIZE-REJCOMP-APPLY-ERROR: invokeId={}", e.getKey(), mex);
+            }
         }
         
         // Manually deserialize MAP messages by looking up type name from wrapper field name

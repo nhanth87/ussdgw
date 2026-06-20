@@ -10,6 +10,7 @@ import io.netty.channel.sctp.nio.NioSctpChannel;
 import io.netty.util.AttributeKey;
 
 import org.mobicents.ussdgateway.EventsSerializeFactory;
+import org.mobicents.ussdgateway.MpscMessageList;
 import org.mobicents.ussdgateway.XmlMAPDialog;
 import org.restcomm.protocols.ss7.indicator.RoutingIndicator;
 import org.restcomm.protocols.ss7.map.api.MAPApplicationContext;
@@ -179,10 +180,20 @@ public class UssdSctpLoadGenerator {
 
     /**
      * Per-channel state to track pending requests for latency measurement.
+     *
+     * <p>Backed by {@link MpscMessageList} (JCTools MpscArrayQueue) instead of
+     * {@link ConcurrentLinkedQueue} because:</p>
+     * <ul>
+     *   <li>One Netty IO thread is the only consumer (per channel) of
+     *       {@link #pendingTimes#poll()}. The SctpWorker instances are
+     *       the many producers calling {@link MpscMessageList#offer(Object)}.</li>
+     *   <li>MPSC is allocation-free on the fast path; CLQ allocates a node
+     *       per offer and per poll, which shows up under high TPS.</li>
+     * </ul>
      */
     private static class ChannelState {
         final Channel channel;
-        final ConcurrentLinkedQueue<Long> pendingTimes = new ConcurrentLinkedQueue<>();
+        final MpscMessageList<Long> pendingTimes = new MpscMessageList<>(1024);
 
         ChannelState(Channel channel) {
             this.channel = channel;
