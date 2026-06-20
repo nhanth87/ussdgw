@@ -35,14 +35,14 @@
 	<property name="restcomm-slee.jdbc.ra.tag" value="7.2.0-113" />
 
 	<property name="restcomm-jss7.build-number" value="102" />
-	<property name="restcomm-jss7.version" value="9.2.10" />
+	<property name="restcomm-jss7.version" value="9.2.12" />
 <!--
 	<property name="restcomm-jss7.release" value="7.3.1398" />
 	<property name="restcomm-jss7.timestamp" value="1602171452" />
 -->
 
 	<property name="restcomm-map-ra.build-number" value="177" />
-	<property name="restcomm-map-ra.version" value="9.2.10" />
+	<property name="restcomm-map-ra.version" value="9.2.12" />
 
 	<property name="restcomm-jdbc-ra.build-number" value="111" />
 	<property name="restcomm-jdbc-ra.version" value="7.0.0-SNAPSHOT" />
@@ -506,7 +506,7 @@
 		<delete includeemptydirs="false" failonerror="false">
 			<fileset dir="${release.dir}/tools/restcomm-jss7-simulator/lib">
 				<include name="*-9.2.7.jar" />
-				<include name="*-9.2.11.jar" />
+				<include name="*-9.2.12.jar" />
 				<include name="stream-1.0.0.CR1.jar" />
 			</fileset>
 		</delete>

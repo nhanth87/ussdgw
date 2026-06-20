@@ -15,7 +15,8 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
- * REPLACED: javolution.util.FastMap with HashMap and javolution.xml with Jackson
+ * REPLACED: javolution.util.FastMap with ConcurrentHashMap and javolution.xml with Jackson
+ * Thread-safe: extends ConcurrentHashMap for safe concurrent updates from SBB event handlers
  * 100% API Compatible with original
  */
 package org.mobicents.ussdgateway;
@@ -27,16 +28,21 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import org.restcomm.protocols.ss7.tcap.asn.comp.Problem;
 
 import java.util.Map;
-import java.util.HashMap;
-import java.util.Collections;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
+ * Thread-safe MAP reject component map.
+ *
+ * <p>Originally backed by {@code javolution.util.FastMap} (not thread-safe). The migration
+ * to {@link ConcurrentHashMap} provides wait-free reads and lock-striped writes so the
+ * SBB event handlers can safely update the map while the dialog serializer iterates
+ * over its contents.</p>
+ *
  * @author sergey vetyutnev
- * @author Matrix Agent
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class RejectComponentMap extends HashMap<String, Problem> {
+public class RejectComponentMap extends ConcurrentHashMap<String, Problem> {
 
     public void put(Long invokeId, Problem problem) {
         this.put("id" + invokeId, problem);
@@ -44,11 +50,14 @@ public class RejectComponentMap extends HashMap<String, Problem> {
 
     @JsonIgnore
     public Map<Long, Problem> getRejectComponents() {
-        Map<Long, Problem> result = new HashMap<>();
+        // entrySet() view of ConcurrentHashMap is weakly consistent and safe to iterate
+        // even if the map is mutated concurrently. We use a plain HashMap to assemble
+        // the typed view because it is published via Collections.unmodifiableMap.
+        Map<Long, Problem> result = new java.util.HashMap<>(size());
         for (Map.Entry<String, Problem> entry : entrySet()) {
             result.put(Long.valueOf(entry.getKey().substring(2)), entry.getValue());
         }
-        return Collections.unmodifiableMap(result);
+        return java.util.Collections.unmodifiableMap(result);
     }
 
     @Override

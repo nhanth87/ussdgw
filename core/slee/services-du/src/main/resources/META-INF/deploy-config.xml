@@ -17,4 +17,13 @@
 		</properties>
 		<ra-link name="HttpServletRA" />
 	</ra-entity>
+	<ra-entity
+		resource-adaptor-id="ResourceAdaptorID[name=MAPResourceAdaptor,vendor=org.restcomm,version=2.0]"
+		entity-name="MAPRA">
+		<properties>
+			<property name="mapJndi" type="java.lang.String" value="java:/restcomm/ss7/map" />
+			<property name="flatIndexEnabled" type="java.lang.Boolean" value="true" />
+		</properties>
+		<ra-link name="MAPRA" />
+	</ra-entity>
 </deploy-config>
