@@ -69,6 +69,11 @@
     <target name="copy-standalone-config">
         <echo>Copying patched standalone.xml</echo>
         <copy file="${patched.standalone.xml}" tofile="${jboss.home}/standalone/configuration/standalone.xml" overwrite="true" />
+        <copy todir="${jboss.home}/standalone/configuration" overwrite="true">
+            <fileset dir="${base.dir}/config-seed/configuration">
+                <include name="mgmt-*.properties"/>
+            </fileset>
+        </copy>
         <replace file="${jboss.home}/bin/standalone.conf" token='JAVA_OPTS="$JAVA_OPTS -Djboss.server.default.config=standalone-sip.xml"' value='JAVA_OPTS="$JAVA_OPTS -Djboss.server.default.config=standalone.xml"' />
     </target>
 

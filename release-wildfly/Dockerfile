@@ -33,6 +33,7 @@ RUN unzip -q /tmp/restcomm-ussd-${USSD_VERSION}-linux.zip -d /opt/restcomm \
  && chown -R ussdgw:ussdgw /opt/restcomm
 
 COPY standalone.conf ${JBOSS_HOME}/bin/standalone.conf
+COPY config-seed/configuration/mgmt-users.properties config-seed/configuration/mgmt-groups.properties ${JBOSS_HOME}/standalone/configuration/
 COPY scripts/ /opt/restcomm/scripts/
 COPY docker-entrypoint.sh /opt/restcomm/docker-entrypoint.sh
 RUN chmod +x /opt/restcomm/docker-entrypoint.sh /opt/restcomm/scripts/*.sh \

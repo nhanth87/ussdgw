@@ -600,6 +600,13 @@ Use `loadtest_client.py --multi-menu` with AS `--bridge-delay 8000` — tests AS
 | Simulator `WstxOutputFactory` NCE | Missing Woodstox in `lib/` | Re-run `build-package.sh`; check `00-preflight.sh` |
 | SLEE `Unresolved compilation` | Bad extension JAR in old image | Rebuild with `./build-docker.sh` (Maven SLEE + verify-slee-jars) |
 | `UnknownHostException: ussd-ng` | Hostname not in `/etc/hosts` with host network | Use image with entrypoint fix; `USSDGW_HOSTNAME=ussd-ng` in compose |
+| GUI `401` on `/ussd-management/` | No mgmt user in WildFly | Image + `/opt/ussdgw/configuration/mgmt-*.properties`; default `admin/admin` |
+| GUI `403` after login | Missing `JBossAdmin` role | `mgmt-groups.properties`: `admin=JBossAdmin` |
+| Gateway still runs old image after rebuild | Docker CLI context ≠ daemon used by compose | `docker context use default` before `build-docker.sh`, `01-load`, and `docker compose up` |
+| `NoClassDefFoundError: disruptor` | SLEE module missing LMAX disruptor | Rebuild image with latest `build-docker.sh` (jain-slee AS7 modules) |
+| MAP RA failed connect / NPE | Cross-classloader `MAPProvider` bug in old image | Image built with jain-slee.ss7 MAP RA proxy fix |
+| `compute-jvm.sh: ... e+09` syntax error | cgroup memory in scientific notation | Image with fixed `compute-jvm.sh` (included in current release) |
+| M3UA `asp1 association not available` | No SCTP peer on 8011 | Start SS7 simulator + MAP load client before expecting MAP ACTIVE |
 
 **Log locations:**
 
@@ -623,4 +630,4 @@ Use `loadtest_client.py --multi-menu` with AS `--bridge-delay 8000` — tests AS
 
 ---
 
-*Last updated: 2026-06-21 — Docker SLEE/hostname fixes, MAP lib/* classpath, simulator Woodstox.*
+*Last updated: 2026-06-21 — Docker context, SLEE/disruptor/MAP RA fixes, hostname, MAP lib/* classpath, Woodstox.*

@@ -490,6 +490,13 @@ Chi tiết thiết kế: [`docs/design/bridge-unified-reconciliation-rfc.md`](de
 | Simulator `WstxOutputFactory` | Thiếu woodstox trong lib | `./scripts/build-package.sh`; `00-preflight.sh` |
 | SLEE `Unresolved compilation` | Image cũ có JAR stub | `./build-docker.sh` (Maven SLEE trước ant) |
 | `UnknownHostException: ussd-ng` | Host network thiếu /etc/hosts | Image mới + `USSDGW_HOSTNAME=ussd-ng` |
+| GUI `401` `/ussd-management/` | Chưa có user WildFly | Image + `/opt/ussdgw/configuration/mgmt-*.properties`; mặc định `admin/admin` |
+| GUI `403` sau login | Thiếu role `JBossAdmin` | `mgmt-groups.properties`: `admin=JBossAdmin` |
+| GW vẫn chạy image cũ sau rebuild | Docker context CLI ≠ daemon của compose | `docker context use default` trước build/load/compose |
+| `NoClassDefFoundError: disruptor` | SLEE module thiếu disruptor | Rebuild `build-docker.sh` (jain-slee AS7 modules) |
+| MAP RA connect fail / NPE | Bug classloader cũ | Image có fix MAP RA proxy (jain-slee.ss7) |
+| `compute-jvm.sh: ... e+09` | cgroup memory dạng scientific | Image mới có `compute-jvm.sh` đã fix |
+| M3UA `asp1 association not available` | Chưa có peer SCTP 8011 | Chạy SS7 simulator + MAP load client trước |
 | Python pip lỗi | Không có mạng | Package có `wheels/` — script tự cài offline |
 
 **Xem log:**
@@ -542,4 +549,4 @@ flowchart LR
 
 ---
 
-*Cập nhật: 2026-06-21 — hướng dẫn step-by-step, ưu tiên package `ussdgw-test`.*
+*Cập nhật: 2026-06-21 — docker context, SLEE/disruptor/MAP RA, hostname, package `ussdgw-test`.*
