@@ -40,7 +40,7 @@ RUN chmod +x /opt/restcomm/docker-entrypoint.sh /opt/restcomm/scripts/*.sh \
 
 EXPOSE 8080 8443 9990 9993 8009 2905 2906 8011 8012
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=5 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=300s --retries=10 \
     CMD curl -fs http://localhost:9990/health || exit 1
 
 ENTRYPOINT ["/opt/restcomm/docker-entrypoint.sh"]
