@@ -1,379 +1,447 @@
-# End-to-End Test: USSD Gateway + gRPC Application Server
+# Hướng dẫn test E2E — USSD Gateway + gRPC AS
 
-Hướng dẫn test đầy đủ luồng USSD qua **USSD Gateway** với **gRPC AS**, dùng hai bộ công cụ:
+> **Mục tiêu:** Gọi `*100#` từ mạng SS7 (giả lập) → USSD Gateway → gRPC Application Server → menu USSD nhiều cấp → kết thúc OK.
 
-| Tool | Vị trí | Vai trò |
-|------|--------|---------|
-| **jSS7 MAP Load Client** | `jSS7/map/load` | Phát MAP `ProcessUnstructuredSSRequest` qua SCTP/M3UA — mô phỏng thuê bao SS7 |
-| **gRPC Python tester** | `ussdgateway/tools/grpc-as-tester` | AS server + load generator gRPC trực tiếp (bypass MAP) |
+**Có 2 cách chạy:**
 
-Menu USSD dùng chung file `menu_config.json` (multi-menu: Balance / Data / Subscribe).
-
----
-
-## 1. Kiến trúc lab
-
-```mermaid
-flowchart LR
-  subgraph ss7["SS7 path (E2E thật)"]
-    MAP["jSS7 MAP Load Client\n:8011 SCTP"]
-    GW["USSD Gateway\n:8012 SCTP"]
-    GRPC["gRPC AS Python\n:8443"]
-    MAP -->|"ProcessUnstructuredSSRequest *100#"| GW
-    GW -->|"gRPC Process (JSON envelope)"| GRPC
-    GRPC -->|"XmlMAPDialog response"| GW
-    GW -->|"UnstructuredSSRequest / End"| MAP
-  end
-
-  subgraph grpc_only["gRPC path (load AS trực tiếp)"]
-    LT["loadtest_client.py"]
-    GRPC2["gRPC AS Python\n:8443"]
-    LT -->|"Begin + Continue turns"| GRPC2
-  end
-```
-
-**Hai đường test:**
-
-1. **E2E SS7 → GW → gRPC AS** — dùng `jSS7/map/load` Client (cần SCTP tới gateway).
-2. **gRPC-only** — dùng `loadtest_client.py` gọi thẳng AS (test throughput/latency AS, không qua MAP).
+| Cách | Ai dùng | Độ khó |
+|------|---------|--------|
+| **[A] Package `ussdgw-test`** | Đem lên server production, giải nén và chạy | ⭐ Dễ — **đọc phần này trước** |
+| **[B] Dev machine** | Build từ source `ussdgateway` + `jSS7` | ⭐⭐⭐ Khó hơn — cuối tài liệu |
 
 ---
 
-## 2. Yêu cầu
+## Trước khi bắt đầu — hiểu 3 thành phần
 
-| Thành phần | Phiên bản / ghi chú |
-|------------|---------------------|
-| JDK | 8 |
-| Maven | 3.9.x |
-| Docker | Gateway image `restcomm-ussd:7.2.1-SNAPSHOT` |
-| Python | 3.8+ với `grpcio` |
-| SCTP (Linux) | Kernel SCTP cho MAP client ↔ gateway |
-| jSS7 | Build simulator + map/load (`9.2.12`) |
-
-**Build gateway Docker** (nếu chưa có image):
-
-```bash
-cd ussdgateway/release-wildfly
-./build-docker.sh
+```
+  [MAP Client]  ----SCTP *100#---->  [USSD Gateway]  ----gRPC---->  [Python AS :8443]
+       |                                    |                              |
+  giả lập thuê bao                    routing + bridge                  menu Balance/Data/...
 ```
 
-**Build jSS7 MAP load:**
+| # | Thành phần | Chạy ở đâu | Port |
+|---|------------|------------|------|
+| 1 | **USSD Gateway** (Docker) | container, host network | SCTP **8012**, HTTP 8080, mgmt **9990** |
+| 2 | **gRPC AS** (Python) | trên cùng máy host | **8443** |
+| 3 | **MAP load client** (Java) | trên cùng máy host | bind SCTP **8011** → gọi GW **8012** |
+
+**Thứ tự bắt buộc:** Gateway + AS phải chạy **trước**, rồi mới chạy MAP client.
+
+---
+
+# [A] Chạy bằng package `ussdgw-test` (khuyến nghị)
+
+## Bước 0 — Chuẩn bị server
+
+**Cần có trên server:**
+
+- Linux x86_64
+- Docker đã cài, user của ông chủ trong group `docker`
+- `java` (JDK 8) — gõ `java -version` phải ra 1.8.x
+- `python3` (3.9–3.12)
+- RAM ≥ 6 GB
+- File package đã giải nén, ví dụ: `/opt/ussdgw-test/`
 
 ```bash
-cd jSS7/map/load
-mvn clean test package -Passemble
-# Output: target/load/map-load.jar + lib/
+# Giải nén (nếu chưa)
+cd /opt
+tar xzf ussdgw-test-7.2.1-SNAPSHOT.tar.gz
+cd ussdgw-test
 ```
 
-**Build jSS7 MAP Simulator** (test thủ công):
+---
+
+## Bước 1 — Bật SCTP kernel
 
 ```bash
-cd jSS7
-mvn clean install -pl tools/simulator -am -Dmaven.test.skip=true
-# Binary: tools/simulator/bootstrap/target/simulator-ss7/bin/run.sh
+sudo modprobe sctp
+lsmod | grep sctp
 ```
 
-**Python AS:**
+**Phải thấy** dòng chứa `sctp`. Không có → MAP test sẽ fail.
+
+---
+
+## Bước 2 — Kiểm tra package đủ file
 
 ```bash
+cd /opt/ussdgw-test          # đổi path nếu ông chủ để chỗ khác
+chmod +x scripts/*.sh
+./scripts/00-preflight.sh
+```
+
+**Phải thấy toàn dòng `OK`**, không có `FAIL`.  
+Nếu `FAIL missing docker tar` → file `docker/restcomm-ussd-7.2.1-SNAPSHOT.tar` bị thiếu khi copy.
+
+---
+
+## Bước 3 — Load image Docker vào máy
+
+```bash
+cd /opt/ussdgw-test
+./scripts/01-load-docker-image.sh
+```
+
+**Phải thấy:** `Loaded image: restcomm-ussd:7.2.1-SNAPSHOT`  
+Hoặc: `Image restcomm-ussd:7.2.1-SNAPSHOT already loaded — skip`
+
+Kiểm tra:
+
+```bash
+docker images restcomm-ussd
+```
+
+---
+
+## Bước 4 — Tạo thư mục config trên host (`/opt/ussdgw`)
+
+```bash
+sudo ./scripts/02-setup-host.sh
+```
+
+Script copy config test (rule `*100#` gRPC, bridge bật) vào `/opt/ussdgw/data/`.
+
+---
+
+## Bước 5 — Start USSD Gateway bằng `docker compose up` ⭐
+
+**Đây là bước chạy container gateway.** File compose nằm tại:
+
+```
+ussdgw-test/gateway/docker-compose.yml
+```
+
+### Lệnh chạy (copy-paste)
+
+```bash
+cd /opt/ussdgw-test/gateway
+
+# Bật gateway (service init chạy trước, rồi ussdgw)
+docker compose up -d
+
+# Xem trạng thái
+docker compose ps
+```
+
+**Phải thấy** container `ussdgw-test` trạng thái `running` (hoặc `healthy` sau ~2 phút).
+
+### Kiểm tra gateway đã sống
+
+```bash
+# Health
+curl -fs http://localhost:9990/health && echo " OK"
+
+# Log (Ctrl+C để thoát)
+docker logs -f ussdgw-test
+```
+
+Log khởi động WildFly mất **1–3 phút**. Đợi đến khi health OK rồi mới test MAP.
+
+### Dừng gateway
+
+```bash
+cd /opt/ussdgw-test/gateway
+docker compose down
+```
+
+### Ghi chú compose
+
+| Service | Container | Vai trò |
+|---------|-----------|---------|
+| `init` | `ussdgw-test-init` | Chạy 1 lần: seed `/opt/ussdgw/data` |
+| `ussdgw` | `ussdgw-test` | USSD Gateway WildFly |
+
+- `network_mode: host` → SCTP listen **8012** trực tiếp trên máy host
+- Image: `restcomm-ussd:7.2.1-SNAPSHOT` (load ở Bước 3)
+- Config: `gateway/config-seed/` → `/opt/ussdgw/data/`
+
+> **Shortcut:** `./scripts/03-start-gateway.sh` = `cd gateway && docker compose up -d` + đợi health.
+
+---
+
+## Bước 6 — Start gRPC Application Server (Python)
+
+Gateway **phải healthy** trước khi chạy bước này.
+
+```bash
+cd /opt/ussdgw-test
+./scripts/05-start-grpc-as.sh
+```
+
+**Phải thấy** trong `grpc-as.log`:
+
+```
+USSD gRPC AS listening on :8443
+```
+
+```bash
+tail -3 grpc-as.log
+```
+
+> **Shortcut:** `sudo ./scripts/start-all.sh` = Bước 3 + 4 + 5 + 6 gộp một lệnh.
+
+---
+
+## Bước 7 — Test luồng đầy đủ SS7 → Gateway → gRPC (MAP smoke)
+
+```bash
+./scripts/06-run-map-smoke.sh
+```
+
+Lệnh này gửi **10 cuộc gọi USSD** `*100#`, tự bấm menu `BALANCE` (chọn `1` rồi `0`).
+
+**Chờ ~30 giây – 2 phút** (có delay 20s khởi động SCTP lần đầu).
+
+### Làm sao biết THÀNH CÔNG?
+
+Trong output cuối, tìm các dòng kiểu:
+
+```
+AS1 is now ACTIVE! Starting load test.
+Total completed dialogs = 10
+Throughput = ...
+```
+
+Và file CSV:
+
+```bash
+ls tools/jss7-map-load/map-*.csv
+# Cột CompletedScenario ≈ 10, FailedScenario thấp hoặc 0
+```
+
+| Kết quả | Ý nghĩa |
+|---------|---------|
+| `AS1 is now ACTIVE` | SCTP Gateway ↔ client OK |
+| `CompletedScenario` ≈ 10 | 10 session USSD hoàn tất |
+| `FailedScenario` = 0 | Không lỗi |
+
+**Nếu fail** → xem [Mục 8 — Lỗi thường gặp](#8-lỗi-thường-gặp).
+
+---
+
+## Bước 8 — Test gRPC trực tiếp (không qua SS7)
+
+Chỉ test Python AS + load client, **không** qua Gateway:
+
+```bash
+./scripts/07-run-grpc-smoke.sh
+```
+
+**Chờ ~30 giây.** Phải thấy:
+
+```
+  mode             : multi-menu
+  completed        : (số > 0)
+  ok / errors      : X / 0
+  achieved TPS     : ...
+```
+
+`errors = 0` → AS + multi-menu OK.
+
+---
+
+## Bước 9 — Dừng hết
+
+```bash
+./scripts/stop-all.sh
+```
+
+Dừng gRPC AS + Docker gateway:
+
+```bash
+./scripts/stop-all.sh
+# hoặc thủ công:
+#   cd gateway && docker compose down
+```
+
+---
+
+## (Tuỳ chọn) Bước 7 — Test thủ công bằng Simulator GUI
+
+Khi smoke fail và cần debug từng bước:
+
+```bash
+# Terminal 1: bật lại lab nếu đã stop
+sudo ./scripts/start-all.sh
+
+# Terminal 2: mở simulator
+cd tools/jss7-simulator/bin
+chmod +x run.sh
+./run.sh gui --name=main
+```
+
+Trong cửa sổ GUI:
+1. Chọn task **USSD_TEST_CLIENT**
+2. Bấm **Start** / kết nối SS7
+3. Gõ USSD: `*100#`
+4. Khi có menu → gõ `1` (Balance) → `0` (Exit)
+
+---
+
+## Chạy từng bước riêng lẻ (thay vì `start-all.sh`)
+
+| Bước | Lệnh | Tương đương thủ công |
+|------|------|----------------------|
+| Load image | `./scripts/01-load-docker-image.sh` | `docker load -i docker/restcomm-ussd-7.2.1-SNAPSHOT.tar` |
+| Setup host | `sudo ./scripts/02-setup-host.sh` | Tạo `/opt/ussdgw/data` |
+| **Start GW** | `./scripts/03-start-gateway.sh` | **`cd gateway && docker compose up -d`** |
+| Stop GW | `./scripts/04-stop-gateway.sh` | **`cd gateway && docker compose down`** |
+| Start AS | `./scripts/05-start-grpc-as.sh` | Python `ussd_as_server.py` |
+| Stop AS | `./scripts/05-stop-grpc-as.sh` | kill gRPC AS |
+| Tất cả | `sudo ./scripts/start-all.sh` | Bước 1→6 gộp |
+
+---
+
+# [B] Chạy từ source (máy dev — không dùng package)
+
+Chỉ dùng khi ông chủ đang develop, **không** có file `ussdgw-test`.
+
+## B.1 — Build (một lần)
+
+```bash
+# Gateway image
+cd ussdgateway/release-wildfly && ./build-docker.sh
+
+# MAP load client
+cd jSS7/map/load && mvn clean package -Passemble -DskipTests
+
+# Python AS
 cd ussdgateway/tools/grpc-as-tester
 python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
 ```
 
----
+## B.2 — Terminal 1: Gateway (docker compose)
 
-## 3. Cấu hình demo (phải khớp nhau)
+```bash
+sudo modprobe sctp
 
-### 3.1 SS7 / SCTP
+# Load image (nếu chưa có)
+docker load -i /path/to/ussdgw-test/docker/restcomm-ussd-7.2.1-SNAPSHOT.tar
 
-| Tham số | Gateway | jSS7 MAP client / Simulator |
-|---------|---------|----------------------------|
-| Gateway SCTP listen | `8012` (trong container: map host `2905:2905/sctp`) | Peer `:8012` |
-| Client SCTP bind | — | Local `:8011` |
-| M3UA RC / NA | `101` / `102` | `101` / `102` |
-| OPC / DPC | GW `2`, peer `1` | Client `1`, peer `2` |
-| USSD SSN | `8` | Remote SSN **`8`** |
-| MSC / HLR SSN | `8` / `6` | `8` / `6` |
-| Short code gRPC | `*100#` | USSD string `*100#` |
+# Setup host + config
+cd /path/to/ussdgw-test
+sudo ./scripts/02-setup-host.sh
 
-File tham chiếu:
-
-- Gateway seed: `release-wildfly/config-seed/SCTPManagement_sctp.xml`
-- Simulator: `core/bootstrap/src/main/config/ss7-simulator/main_simulator2.xml`
-
-### 3.2 Routing rule gRPC
-
-Seed mặc định **chưa có** rule gRPC. Thêm vào
-`/opt/ussdgw/data/UssdManagement_scroutingrule.xml` (hoặc sửa trước khi deploy):
-
-```xml
-<item>
-  <ruleType>GRPC</ruleType>
-  <shortcode>*100#</shortcode>
-  <networkid>0</networkid>
-  <ruleurl>host.docker.internal:8443</ruleurl>
-  <exactmatch>true</exactmatch>
-</item>
+# Start gateway
+cd gateway
+docker compose up -d
+docker compose ps
+curl -fs http://localhost:9990/health && echo " OK"
 ```
 
-- Gateway **trong Docker**, AS **trên host**: dùng `host.docker.internal:8443` (Linux: thêm `extra_hosts` hoặc IP host).
-- Cả hai trên host: `127.0.0.1:8443`.
-
-`ruleurl` chỉ cần `host:port` — gateway là gRPC **client**, AS là server.
-
-### 3.3 Virtual Session Bridge (tuỳ chọn — test adaptive timeout)
-
-Sửa `/opt/ussdgw/data/UssdManagement_ussdproperties.xml`:
-
-```xml
-<sessionbridgeenabled>true</sessionbridgeenabled>
-<asyncgatetimeoutms>7000</asyncgatetimeoutms>
-<dialogtimeout>25000</dialogtimeout>
-```
-
-| Property | Ý nghĩa |
-|----------|---------|
-| `asyncGateTimeoutMs` | Trần gate (ms); EWMA adaptive ≤ giá trị này |
-| `asyncWaitUserMessage` | S1 release khi gate hết |
-| `bridgeStateTtlSec` | TTL virtual session (180s) |
-| `GRPC_DEADLINE_MS` | 30000 ms (RA deploy-config) |
-
-Chi tiết thiết kế: [`docs/design/virtual-session-bridge.md`](design/virtual-session-bridge.md).
-
-### 3.4 Menu tree (shared)
-
-File: `tools/grpc-as-tester/menu_config.json` (copy tương đương trong `jSS7/map/load/src/main/resources/`).
-
-| Profile | Lượt chọn (digits) | Kết quả |
-|---------|-------------------|---------|
-| `BALANCE` | `1` → `0` | Xem balance → Exit |
-| `DATA` | `2` → `1` | Chọn bundle 1GB → Final |
-| `SUBSCRIBE` | `3` → `100` | Nhập amount → Final |
-| `RANDOM` | Random hợp lệ mỗi node | — |
-
----
-
-## 4. Khởi động lab
-
-### Bước 1 — Gateway
+Hoặc từ source tree (sau `./build-docker.sh`):
 
 ```bash
 cd ussdgateway/release-wildfly
-
-# Khuyến nghị: map SCTP ra host
-docker run -d --name ussdgw-e2e \
-  --memory=5g --cpus=2 \
-  -p 8080:8080 -p 9990:9990 \
-  -p 2905:2905/sctp \
-  -v ussdgw-data:/opt/ussdgw/data \
-  -v ussdgw-log:/opt/ussdgw/log \
-  --add-host=host.docker.internal:host-gateway \
-  restcomm-ussd:7.2.1-SNAPSHOT
-
-# Đợi healthy
-docker exec ussdgw-e2e curl -fs http://localhost:9990/health
+sudo ./setup-server.sh
+docker compose up -d
 ```
 
-Sau khi container chạy lần đầu, chỉnh `data/UssdManagement_scroutingrule.xml` và `data/UssdManagement_ussdproperties.xml` như mục 3, rồi restart container.
-
-### Bước 2 — gRPC Application Server
+## B.3 — Terminal 2: gRPC AS
 
 ```bash
 cd ussdgateway/tools/grpc-as-tester
-./.venv/bin/python ussd_as_server.py \
-  --port 8443 \
-  --min-delay 1 --max-delay 100 \
-  --menu-config menu_config.json
+./.venv/bin/python ussd_as_server.py --port 8443 --menu-config menu_config.json
 ```
 
-Log mong đợi: `USSD gRPC AS listening on :8443`.
-
-### Bước 3 — (Tuỳ chọn) MAP Simulator GUI
-
-Dùng khi debug từng bước thay vì load generator:
-
-```bash
-cd jSS7/tools/simulator/bootstrap/target/simulator-ss7/bin
-cp ../../../../../../ussdgateway/core/bootstrap/src/main/config/ss7-simulator/main_simulator2.xml \
-   ../data/main_simulator2.xml
-./run.sh gui --name=main
-```
-
-Trong GUI: `USSD_TEST_CLIENT`, dial `*100#`, trả lời menu thủ công.
-
----
-
-## 5. Test E2E — Tool 1: jSS7 MAP Load Client
-
-Luồng: **MAP client → Gateway SCTP → gRPC AS → menu multi-turn → End**.
-
-### 5.1 Smoke test (1 profile, ít dialog)
+## B.4 — Terminal 3: MAP smoke
 
 ```bash
 cd jSS7/map/load
-
 java -cp "target/load/*" org.restcomm.protocols.ss7.map.load.ussd.Client \
-  10 5 sctp 127.0.0.1 8011 -1 127.0.0.1 2905 IPSP 101 102 1 2 3 2 8 6 8 \
-  1111112 9960639999 1 16 -100 0 "*100#" BALANCE 50 200
+  10 5 sctp 127.0.0.1 8011 -1 127.0.0.1 8012 IPSP 101 102 1 2 3 2 8 6 8 \
+  1111112 9960639999 1 4 -100 0 "*100#" BALANCE 50 200
 ```
 
-> **Port:** Nếu gateway map `2905:2905/sctp`, client peer port = `2905`. Nếu chạy WildFly trực tiếp trên host, dùng `8012`.
-
-| Arg (vị trí) | Giá trị ví dụ | Ý nghĩa |
-|--------------|---------------|---------|
-| 1–2 | `10` `5` | 10 dialog, 5 concurrent |
-| 25 | `*100#` | Short code khớp scrule gRPC |
-| 26 | `BALANCE` | Menu profile |
-| 27–28 | `50` `200` | Think delay ms (adaptive gate) |
-
-Hoặc qua Ant (defaults trong `ussd_build.xml`):
-
-```bash
-ant -f ussd_build.xml assemble
-ant -f ussd_build.xml client
-```
-
-### 5.2 Load test multi-menu
-
-```bash
-java -cp "target/load/*" org.restcomm.protocols.ss7.map.load.ussd.Client \
-  100000 400 sctp 127.0.0.1 8011 -1 127.0.0.1 2905 IPSP 101 102 1 2 3 2 8 6 8 \
-  1111112 9960639999 1 16 -100 5 "*100#" RANDOM 50 300
-```
-
-Arg 24 = `5` → chạy **5 phút** (duration mode).
-
-Metrics CSV: `map-*.csv` trong thư mục làm việc (`CreatedScenario`, `CompletedScenario`, `FailedScenario`).
-
-### 5.3 Verify thành công
-
-- [ ] Client log: `AS1 is now ACTIVE`, throughput cuối test
-- [ ] `CompletedScenario` ≈ số dialog hoàn thành; `FailedScenario` thấp
-- [ ] Gateway log: gRPC call tới AS, không `no routing rule` cho `*100#`
-- [ ] AS log: nhiều session với menu turns
-- [ ] CDR (nếu bật): S1/S2 khi bridge enabled
+> Port peer = **8012** khi gateway dùng `network_mode: host`.
 
 ---
 
-## 6. Test — Tool 2: gRPC Python (`loadtest_client.py`)
+# 7. Test nâng cao (sau khi smoke OK)
 
-Luồng: **Load client → gRPC AS trực tiếp** (không qua MAP). Dùng để:
+## Adaptive timeout
 
-- Benchmark AS thuần (TPS/latency)
-- Test multi-menu ở tầng gRPC (cùng `menu_config.json`)
-
-### 6.1 Single-shot (Begin only — throughput cao)
+Gateway đã bật bridge trong package (`asyncGateTimeoutMs=7000`). Chạy MAP với think delay:
 
 ```bash
-cd ussdgateway/tools/grpc-as-tester
-./.venv/bin/python loadtest_client.py \
-  --target localhost:8443 \
-  --tps 1000 --duration 10
+cd tools/jss7-map-load
+java -cp "lib/*" org.restcomm.protocols.ss7.map.load.ussd.Client \
+  50 10 sctp 127.0.0.1 8011 -1 127.0.0.1 8012 IPSP 101 102 1 2 3 2 8 6 8 \
+  1111112 9960639999 1 4 -100 0 "*100#" RANDOM 50 500
 ```
 
-### 6.2 Multi-menu full session
+## Bridge late-response (AS chậm hơn gate 7s)
 
 ```bash
-./.venv/bin/python loadtest_client.py \
-  --target localhost:8443 \
-  --tps 200 --duration 30 \
-  --multi-menu --profile BALANCE \
-  --think-min 50 --think-max 200 \
-  --menu-config menu_config.json
+./scripts/05-stop-grpc-as.sh
+cd tools/grpc-as-tester && ../.venv/bin/python ussd_as_server.py \
+  --port 8443 --bridge-delay 8000 --bridge-every 1 &
+# Rồi chạy lại 06-run-map-smoke.sh
 ```
 
-Profiles: `BALANCE`, `DATA`, `SUBSCRIBE`, `RANDOM`.
-
-Output mẫu:
-
-```
-  mode             : multi-menu
-  completed        : 5842
-  achieved TPS     : 194
-  latency p95 (ms) : 12.34
-```
-
-### 6.3 So sánh hai tool
-
-| | MAP Load Client | gRPC loadtest_client |
-|--|-----------------|----------------------|
-| Entry | SCTP/MAP | gRPC unary |
-| Test gateway routing | ✓ | ✗ |
-| Test MAP dialog / TCAP | ✓ | ✗ |
-| Test gRPC AS menu | ✓ (qua GW) | ✓ (trực tiếp) |
-| Multi-menu | ✓ profiles | ✓ `--multi-menu` |
-| Adaptive delay | Think delay + AS delay | `--think-min/max` + AS delay |
+Chi tiết thiết kế: [`docs/design/bridge-unified-reconciliation-rfc.md`](design/bridge-unified-reconciliation-rfc.md)
 
 ---
 
-## 7. Scenarios nâng cao
+# 8. Lỗi thường gặp
 
-### 7.1 Adaptive timeout (EWMA gate)
+| Triệu chứng | Nguyên nhân | Cách sửa |
+|-------------|-------------|----------|
+| `AS1` không ACTIVE | SCTP chưa kết nối | `sudo modprobe sctp`; kiểm tra GW đang chạy; port 8011↔8012 |
+| `Not valid short code` | Thiếu rule `*100#` | Package đã có sẵn; nếu dev: sửa `UssdManagement_scroutingrule.xml` |
+| gRPC connection refused | AS chưa chạy | `./scripts/05-start-grpc-as.sh` hoặc xem `grpc-as.log` |
+| `FailedScenario` cao | AS chậm / GW chưa ready | Đợi GW healthy; chạy lại sau `start-all.sh` |
+| `docker load` lỗi | File tar hỏng/thiếu | Copy lại `docker/*.tar` |
+| Python pip lỗi | Không có mạng | Package có `wheels/` — script tự cài offline |
 
-**Gateway:** `sessionbridgeenabled=true`, `asyncgatetimeoutms=7000`
-
-**AS:**
-
-```bash
-./.venv/bin/python ussd_as_server.py --port 8443 --min-delay 1 --max-delay 100
-```
-
-**MAP client:** profile `ADAPTIVE` hoặc `RANDOM`, think `50–500` ms.
-
-**Kỳ vọng:** Gate co/giãn theo latency AS; multi-turn vẫn complete trước `dialogtimeout` (25s).
-
-### 7.2 Bridge late-response (Channel A reconcile)
-
-**AS** cố ý chậm hơn gate:
+**Xem log:**
 
 ```bash
-./.venv/bin/python ussd_as_server.py \
-  --port 8443 --bridge-delay 8000 --bridge-every 1
+docker logs ussdgw-test          # Gateway
+tail -f grpc-as.log              # gRPC AS
+ls tools/jss7-map-load/map-*.csv # Kết quả MAP
 ```
 
-**Kỳ vọng:**
+---
 
-1. Gate (7s) fires → MO release S1 (`asyncWaitUserMessage`)
-2. AS trả lễ → gateway reconcile qua `requestId` → NI push S2
+# Phụ lục — Kiến trúc chi tiết
 
-Verify: gateway metrics/log `bridge_late_*`, CDR S1 + S2. Spec: [`docs/design/bridge-unified-reconciliation-rfc.md`](design/bridge-unified-reconciliation-rfc.md).
+```mermaid
+flowchart LR
+  MAP["MAP Client :8011"] -->|"*100# SCTP"| GW["USSD GW :8012"]
+  GW -->|"gRPC JSON"| AS["Python AS :8443"]
+  AS -->|"menu XML"| GW
+  GW -->|"UnstructuredSSRequest"| MAP
+```
 
-### 7.3 Direct gRPC bridge test (không MAP)
+## Config đã khớp sẵn (package `ussdgw-test`)
 
-Dùng `loadtest_client.py --multi-menu` với AS `--bridge-delay 8000` — test AS + envelope `requestId` echo; **không** cover MAP/SCTP path.
+| Tham số | Gateway | MAP client |
+|---------|---------|------------|
+| SCTP | listen **8012** | bind **8011** → peer **8012** |
+| M3UA RC/NA | 101 / 102 | 101 / 102 |
+| OPC/DPC | 2 / 1 | 1 / 2 |
+| USSD SSN | 8 | 8 |
+| Short code | `*100#` → `127.0.0.1:8443` | `*100#` |
+
+## Menu profiles
+
+| Profile | Bấm phím | Kết quả |
+|---------|----------|---------|
+| `BALANCE` | `1` → `0` | Xem số dư → Thoát |
+| `DATA` | `2` → `1` | Chọn gói 1GB |
+| `SUBSCRIBE` | `3` → `100` | Đăng ký |
+| `RANDOM` | ngẫu nhiên | |
+
+## Tài liệu thêm
+
+| File | Nội dung |
+|------|----------|
+| [`ussdgw-test/README.md`](../../ussdgw-test/README.md) | Tóm tắt package |
+| [`e2e-grpc-ussd-test_en.md`](e2e-grpc-ussd-test_en.md) | English version |
+| [`jSS7/map/load/USSD-LOADTEST.md`](../../jSS7/map/load/USSD-LOADTEST.md) | MAP CLI đầy đủ |
+| [`docs/design/virtual-session-bridge.md`](design/virtual-session-bridge.md) | Bridge design |
 
 ---
 
-## 8. Checklist troubleshooting
-
-| Triệu chứng | Nguyên nhân thường gặp | Fix |
-|-------------|------------------------|-----|
-| `AS1` không ACTIVE | SCTP chưa kết nối | Kiểm tra port 8011↔8012/2905, firewall |
-| `Not valid short code` | Thiếu scrule `*100#` GRPC | Thêm rule mục 3.2 |
-| AS connection refused | AS chưa chạy / sai host từ container | `host.docker.internal:8443` |
-| Dialog timeout MAP | SSN sai (147 vs 8) | Client `ussdSsn=8` |
-| Menu stuck 1 turn | AS single-turn / sai menu | Dùng `ussd_as_server.py` + `menu_config.json` |
-| `FailedScenario` cao | Think delay + bridge quá dài | Giảm `--bridge-delay` hoặc tăng `dialogtimeout` |
-| gRPC load 0 ok | Sai target / AS down | `curl` không áp dụng; check `--target host:8443` |
-
-**Log locations:**
-
-- MAP client: `client/maplog.txt` (Ant) hoặc stdout
-- Gateway: `docker logs ussdgw-e2e`
-- gRPC AS: stdout (bật `--verbose`)
-
----
-
-## 9. Tài liệu liên quan
-
-| Tài liệu | Nội dung |
-|----------|----------|
-| [`tools/grpc-as-tester/`](../tools/grpc-as-tester/) | AS server + load client source |
-| [`jSS7/map/load/USSD-LOADTEST.md`](../../jSS7/map/load/USSD-LOADTEST.md) | MAP load CLI chi tiết |
-| [`docs/design/virtual-session-bridge.md`](design/virtual-session-bridge.md) | Bridge FSM + adaptive timeout |
-| [`docs/design/bridge-unified-reconciliation-rfc.md`](design/bridge-unified-reconciliation-rfc.md) | Late response reconcile |
-| [`release-wildfly/DEPLOY-GUIDE.md`](../release-wildfly/DEPLOY-GUIDE.md) | Docker deploy + SCTP |
-
----
-
-*Cập nhật: 2026-06-21 — multi-menu MAP load + gRPC `--multi-menu`.*
+*Cập nhật: 2026-06-21 — hướng dẫn step-by-step, ưu tiên package `ussdgw-test`.*
