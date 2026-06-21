@@ -9,6 +9,12 @@
 [![LoadTest](https://img.shields.io/badge/Load%20Test-10k%20TPS-brightgreen.svg)](#-10k-tps-load-test-suite)
 [![JCTools](https://img.shields.io/badge/Collections-JCTools%204.0.3-yellow.svg)](https://github.com/JCTools/JCTools)
 
+## What's New — gRPC AS & Adaptive Timeout
+
+**gRPC to your Application Server.** The gateway talks to the AS over **gRPC (HTTP/2)** as easily as HTTP — same pull/push USSD flows, same routing rules, one unified `sessionId`/`correlationId` from the first network hit through every AS callback. Your AS stays a gRPC server; the gateway is the client. Drop it into a microservices stack without HTTP/XML glue or extra sidecars.
+
+**Adaptive timeout that learns your network.** Fixed timeouts are a productivity tax: too aggressive and you drop valid responses from a busy AS; too lenient and MAP dialogues pile up, capping TPS. Adaptive timeout tracks **observed AS latency per network (EWMA)** and widens or tightens the gate automatically — fast links stay snappy, slow operators get headroom without hand-tuning XML for every deployment. Paired with **Virtual Session Bridge**, a slow AS no longer kills the subscriber journey: the MO dialogue closes on time, the AS answers asynchronously, and NI push delivers the menu when ready. **More completed sessions, fewer false timeouts, less ops firefighting** — especially under mixed latency (banking peaks, cross-border SS7, overloaded cores).
+
 ---
 
 ## 💡 What is USSD Gateway?
