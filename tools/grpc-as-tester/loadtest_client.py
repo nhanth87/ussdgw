@@ -22,6 +22,7 @@ import grpc
 
 import ussd_envelope as env
 import ussd_xml as uxml
+import warmup
 
 _RPC_PATH = "/" + env.FULL_METHOD
 
@@ -110,12 +111,11 @@ def _continue_request(session_id: str, choice: str, invoke_id: int, req_idx: int
                               request_id=request_id)
 
 
-async def _run_single_shot(target, tps, duration, max_inflight, result_q):
+async def _run_single_shot(target, tps, duration, max_inflight, use_warmup, result_q):
     channel = grpc.aio.insecure_channel(target)
     call = channel.unary_unary(_RPC_PATH, request_serializer=lambda b: b, response_deserializer=lambda b: b)
     latencies, errors, sent = [], 0, 0
     sem = asyncio.Semaphore(max_inflight)
-    interval = 1.0 / tps if tps > 0 else 0
     start = time.perf_counter()
     deadline = start + duration
     tasks = []
@@ -136,6 +136,9 @@ async def _run_single_shot(target, tps, duration, max_inflight, result_q):
     i = 0
     while time.perf_counter() < deadline:
         now = time.perf_counter()
+        elapsed = now - start
+        current_tps = warmup.target_tps_at(elapsed, tps, use_warmup)
+        interval = 1.0 / current_tps if current_tps > 0 else 0
         if now < next_send:
             await asyncio.sleep(min(next_send - now, 0.001))
             continue
@@ -153,13 +156,12 @@ async def _run_single_shot(target, tps, duration, max_inflight, result_q):
 
 
 async def _run_multi_menu(target, tps, duration, max_inflight, profile, think_min, think_max,
-                          menu_config, result_q):
+                          menu_config, use_warmup, result_q):
     channel = grpc.aio.insecure_channel(target)
     call = channel.unary_unary(_RPC_PATH, request_serializer=lambda b: b, response_deserializer=lambda b: b)
     walker = MenuWalker(menu_config)
     latencies, errors, sessions = [], 0, 0
     sem = asyncio.Semaphore(max_inflight)
-    interval = 1.0 / tps if tps > 0 else 0
     start = time.perf_counter()
     deadline = start + duration
     tasks = []
@@ -196,6 +198,9 @@ async def _run_multi_menu(target, tps, duration, max_inflight, profile, think_mi
     i = 0
     while time.perf_counter() < deadline:
         now = time.perf_counter()
+        elapsed = now - start
+        current_tps = warmup.target_tps_at(elapsed, tps, use_warmup)
+        interval = 1.0 / current_tps if current_tps > 0 else 0
         if now < next_send:
             await asyncio.sleep(min(next_send - now, 0.001))
             continue
@@ -212,12 +217,13 @@ async def _run_multi_menu(target, tps, duration, max_inflight, profile, think_mi
 
 
 def _worker_proc(args_tuple):
-    (target, tps, duration, max_inflight, multi_menu, profile, think_min, think_max, menu_config, result_q) = args_tuple
+    (target, tps, duration, max_inflight, multi_menu, profile, think_min, think_max,
+     menu_config, use_warmup, result_q) = args_tuple
     if multi_menu:
         asyncio.run(_run_multi_menu(target, tps, duration, max_inflight, profile, think_min, think_max,
-                                    menu_config, result_q))
+                                    menu_config, use_warmup, result_q))
     else:
-        asyncio.run(_run_single_shot(target, tps, duration, max_inflight, result_q))
+        asyncio.run(_run_single_shot(target, tps, duration, max_inflight, use_warmup, result_q))
 
 
 def _percentile(values, pct):
@@ -240,6 +246,7 @@ def main():
     ap.add_argument("--think-min", type=int, default=0, help="min delay between menu turns (ms)")
     ap.add_argument("--think-max", type=int, default=0, help="max delay between menu turns (ms)")
     ap.add_argument("--menu-config", default="menu_config.json")
+    warmup.add_warmup_arguments(ap)
     args = ap.parse_args()
 
     per_proc_tps = max(1, args.tps // args.processes)
@@ -247,7 +254,7 @@ def main():
     procs = []
     worker_args = (args.target, per_proc_tps, args.duration, args.max_inflight,
                    args.multi_menu, args.profile, args.think_min, args.think_max,
-                   args.menu_config, result_q)
+                   args.menu_config, args.warmup, result_q)
     for _ in range(args.processes):
         p = mp.Process(target=_worker_proc, args=(worker_args,))
         p.start()
@@ -274,6 +281,7 @@ def main():
         print("  profile          : %s" % args.profile)
         print("  think delay (ms) : %d-%d" % (args.think_min, args.think_max))
     print("  target TPS       : %d (%d procs x %d)" % (args.tps, args.processes, per_proc_tps))
+    print("  %s" % warmup.warmup_summary(args.tps, args.warmup))
     print("  duration         : %ds (elapsed %.2fs)" % (args.duration, elapsed))
     print("  started          : %d" % total_sent)
     print("  completed        : %d" % total_sessions)

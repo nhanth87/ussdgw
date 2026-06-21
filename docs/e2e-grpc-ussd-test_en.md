@@ -347,6 +347,26 @@ In the GUI: select `USSD_TEST_CLIENT`, dial `*100#`, respond to menus manually.
 
 ---
 
+## 4.5 TPS warmup (all load tools)
+
+All load generators ramp TPS over the first **60 seconds** before reaching the configured target. Steps: `1 → 100 → 500 → 1000 → 2000 → 3000 → 5000 → 7000 → 10000` (capped at `--tps` / `MAXCONCURRENTDIALOGS`). Avoids slamming full rate into USSD GW before JVM/SLEE/TCAP are ready.
+
+| Tool | Disable warmup |
+|------|----------------|
+| gRPC `loadtest_client.py` | `--no-warmup` |
+| HTTP `http_push_loadtest.py` | `--no-warmup` |
+| MAP `Client.java` | `-Dwarmup=false` |
+
+Example (gRPC, 5000 TPS target):
+
+```
+warmup 60s: 1 → 100 → 500 → 1000 → 2000 → 3000 → 5000 TPS
+```
+
+MAP client prints the same summary at startup via `WarmupRateHelper.summary(MAXCONCURRENTDIALOGS)`.
+
+---
+
 ## 5. E2E test — Tool 1: jSS7 MAP Load Client
 
 Flow: **MAP client → Gateway SCTP → gRPC AS → multi-turn menu → End**.
@@ -410,6 +430,8 @@ java -cp "target/load/*" org.restcomm.protocols.ss7.map.load.ussd.Client \
 
 Arg 24 = `5` → run for **5 minutes** (duration mode).
 
+> **Warmup (default ON):** client ramps arg 2 (`MAXCONCURRENTDIALOGS`) over 60 s (see §4.5). Disable for instant full rate: prefix with `-Dwarmup=false` (e.g. `java -Dwarmup=false -cp "lib/*" ...`).
+
 Metrics CSV: `map-*.csv` in the working directory (`CreatedScenario`, `CompletedScenario`, `FailedScenario`).
 
 ### 5.3 Success criteria
@@ -438,6 +460,8 @@ cd ussdgateway/tools/grpc-as-tester
   --tps 1000 --duration 10
 ```
 
+> **Warmup (default ON):** ramps to `--tps` over 60 s (see §4.5). For stress/burst testing, add `--no-warmup`.
+
 ### 6.2 Multi-menu full session
 
 ```bash
@@ -448,6 +472,8 @@ cd ussdgateway/tools/grpc-as-tester
   --think-min 50 --think-max 200 \
   --menu-config menu_config.json
 ```
+
+> **Warmup (default ON):** same 60 s ramp as §6.1; use `--no-warmup` only when you need full `--tps` from second zero.
 
 Profiles: `BALANCE`, `DATA`, `SUBSCRIBE`, `RANDOM`.
 
@@ -476,6 +502,7 @@ From `ussdgw-test`:
 | Tests gRPC AS menu | ✓ (via GW) | ✓ (direct) |
 | Multi-menu | ✓ profiles | ✓ `--multi-menu` |
 | Adaptive delay | Think delay + AS delay | `--think-min/max` + AS delay |
+| TPS warmup | 60 s ramp (default); `-Dwarmup=false` | 60 s ramp (default); `--no-warmup` |
 
 ---
 
@@ -520,6 +547,8 @@ python3 http_push_loadtest.py \
   --think-min 50 --think-max 200
 ```
 
+> **Warmup (default ON):** ramps to `--tps` over 60 s (see §4.5). Add `--no-warmup` for immediate full-rate stress.
+
 Modes: `notify` (USSD notify only), `request` / `multi` (multi-step NI menu, XML built automatically).
 
 From `ussdgw-test`:
@@ -536,6 +565,7 @@ From `ussdgw-test`:
 | XML | Auto from menu | Auto from menu | SS7 + HTTP AS |
 | 1000 TPS | AS thread pool | `--tps 1000` | MAP load + HTTP AS |
 | Adaptive / bridge | `--min/max-delay`, `--bridge-delay` | think delay between push steps | think delay in MAP client |
+| TPS warmup | — (server) | 60 s ramp (default); `--no-warmup` | 60 s ramp (default); `-Dwarmup=false` |
 
 Legacy Swing GUI simulator (manual XML): `tools/http-simulator/bin/run.sh` — still bundled in `ussdgw-test/tools/http-simulator/`.
 
@@ -630,4 +660,4 @@ Use `loadtest_client.py --multi-menu` with AS `--bridge-delay 8000` — tests AS
 
 ---
 
-*Last updated: 2026-06-21 — Docker context, SLEE/disruptor/MAP RA fixes, hostname, MAP lib/* classpath, Woodstox.*
+*Last updated: 2026-06-22 — TPS warmup (default 60 s ramp), Docker context, SLEE/disruptor/MAP RA fixes, hostname, MAP lib/* classpath, Woodstox.*

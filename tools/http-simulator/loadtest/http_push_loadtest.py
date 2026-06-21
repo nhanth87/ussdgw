@@ -23,6 +23,7 @@ import aiohttp
 
 import menu_engine
 import ussd_xml as uxml
+import warmup
 
 
 async def _post(session, url, body: bytes, timeout: int):
@@ -32,10 +33,9 @@ async def _post(session, url, body: bytes, timeout: int):
         return resp.status
 
 
-async def _run_notify(target, tps, duration, msisdn, text, max_inflight, result_q):
+async def _run_notify(target, tps, duration, msisdn, text, max_inflight, use_warmup, result_q):
     latencies, errors, sent = [], 0, 0
     sem = asyncio.Semaphore(max_inflight)
-    interval = 1.0 / tps if tps > 0 else 0
     start = time.perf_counter()
     deadline = start + duration
     tasks = []
@@ -59,6 +59,9 @@ async def _run_notify(target, tps, duration, msisdn, text, max_inflight, result_
         i = 0
         while time.perf_counter() < deadline:
             now = time.perf_counter()
+            elapsed = now - start
+            current_tps = warmup.target_tps_at(elapsed, tps, use_warmup)
+            interval = 1.0 / current_tps if current_tps > 0 else 0
             if now < next_send:
                 await asyncio.sleep(min(next_send - now, 0.001))
                 continue
@@ -75,12 +78,11 @@ async def _run_notify(target, tps, duration, msisdn, text, max_inflight, result_
 
 
 async def _run_multi(target, tps, duration, msisdn, profile, menu_config, think_min, think_max,
-                     max_inflight, result_q):
+                     max_inflight, use_warmup, result_q):
     walker = menu_engine.MenuEngine(menu_config)
     root_text = walker.menu_text()
     latencies, errors, sent = [], 0, 0
     sem = asyncio.Semaphore(max_inflight)
-    interval = 1.0 / tps if tps > 0 else 0
     start = time.perf_counter()
     deadline = start + duration
     tasks = []
@@ -109,6 +111,9 @@ async def _run_multi(target, tps, duration, msisdn, profile, menu_config, think_
         i = 0
         while time.perf_counter() < deadline:
             now = time.perf_counter()
+            elapsed = now - start
+            current_tps = warmup.target_tps_at(elapsed, tps, use_warmup)
+            interval = 1.0 / current_tps if current_tps > 0 else 0
             if now < next_send:
                 await asyncio.sleep(min(next_send - now, 0.001))
                 continue
@@ -126,12 +131,12 @@ async def _run_multi(target, tps, duration, msisdn, profile, menu_config, think_
 
 def _worker(args_tuple):
     (mode, target, tps, duration, msisdn, text, profile, think_min, think_max,
-     menu_config, max_inflight, result_q) = args_tuple
+     menu_config, max_inflight, use_warmup, result_q) = args_tuple
     if mode == "notify":
-        asyncio.run(_run_notify(target, tps, duration, msisdn, text, max_inflight, result_q))
+        asyncio.run(_run_notify(target, tps, duration, msisdn, text, max_inflight, use_warmup, result_q))
     else:
         asyncio.run(_run_multi(target, tps, duration, msisdn, profile, menu_config,
-                               think_min, think_max, max_inflight, result_q))
+                               think_min, think_max, max_inflight, use_warmup, result_q))
 
 
 def _percentile(values, pct):
@@ -156,6 +161,7 @@ def main():
     ap.add_argument("--think-min", type=int, default=50)
     ap.add_argument("--think-max", type=int, default=200)
     ap.add_argument("--menu-config", default="menu_config.json")
+    warmup.add_warmup_arguments(ap)
     args = ap.parse_args()
 
     if args.mode == "request":
@@ -166,7 +172,7 @@ def main():
     result_q = mp.Queue()
     worker_args = (args.mode, args.target, per_tps, args.duration, args.msisdn,
                    args.notify_text, args.profile, args.think_min, args.think_max,
-                   args.menu_config, args.max_inflight, result_q)
+                   args.menu_config, args.max_inflight, args.warmup, result_q)
     procs = []
     for _ in range(args.processes):
         p = mp.Process(target=_worker, args=(worker_args,))
@@ -189,6 +195,7 @@ def main():
     print("  target     : %s" % args.target)
     print("  mode       : %s" % args.mode)
     print("  target TPS : %d (%d x %d)" % (args.tps, args.processes, per_tps))
+    print("  %s" % warmup.warmup_summary(args.tps, args.warmup))
     print("  duration   : %ds (elapsed %.2fs)" % (args.duration, elapsed))
     print("  started    : %d" % total_sent)
     print("  ok / errors: %d / %d" % (total_ok, total_err))
