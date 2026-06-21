@@ -353,9 +353,71 @@ From `ussdgw-test`:
 
 ---
 
-## 7. Advanced scenarios
+## 7. Test — Tool 3: HTTP (`http-simulator/loadtest`)
 
-### 7.1 Adaptive timeout (EWMA gate)
+Auto-generated XmlMAPDialog (no manual XML). Same `menu_config.json` and profiles as gRPC/MAP.
+
+| Script | Scenario | Direction |
+|--------|----------|-----------|
+| `http_as_server.py` | **Pull** (MO) | Gateway POSTs → AS listens on `:8049` |
+| `http_push_loadtest.py` | **Push** (NI) | Client POSTs → gateway `/restcomm` |
+
+Routing: `*519#` → `http://127.0.0.1:8049/` (HTTP pull). Push URL: `http://127.0.0.1:8080/restcomm`.
+
+### 7.1 HTTP Pull — start AS + MAP smoke
+
+```bash
+# Terminal: HTTP Pull AS (adaptive delay 1–100 ms)
+cd ussdgateway/tools/http-simulator/loadtest
+pip install -r requirements.txt
+python3 http_as_server.py --port 8049 --min-delay 1 --max-delay 100
+
+# Bridge / adaptive timeout exercise:
+python3 http_as_server.py --port 8049 --bridge-delay 8000 --bridge-every 10
+```
+
+From `ussdgw-test` (gateway + MAP client already running):
+
+```bash
+./scripts/09-start-http-as.sh
+./scripts/12-run-http-pull-smoke.sh    # 10 dialogs, *519#, BALANCE
+```
+
+### 7.2 HTTP Push — load 1000 TPS
+
+```bash
+cd ussdgateway/tools/http-simulator/loadtest
+python3 http_push_loadtest.py \
+  --target http://127.0.0.1:8080/restcomm \
+  --mode multi --profile BALANCE \
+  --tps 1000 --duration 30 \
+  --think-min 50 --think-max 200
+```
+
+Modes: `notify` (USSD notify only), `request` / `multi` (multi-step NI menu, XML built automatically).
+
+From `ussdgw-test`:
+
+```bash
+./scripts/13-run-http-push-smoke.sh    # 50 TPS × 30s smoke
+```
+
+### 7.3 HTTP tool comparison
+
+| | HTTP Pull AS | HTTP Push loadtest | MAP + HTTP |
+|--|--------------|-------------------|------------|
+| Entry | HTTP POST from GW | HTTP POST to GW | SCTP `*519#` |
+| XML | Auto from menu | Auto from menu | SS7 + HTTP AS |
+| 1000 TPS | AS thread pool | `--tps 1000` | MAP load + HTTP AS |
+| Adaptive / bridge | `--min/max-delay`, `--bridge-delay` | think delay between push steps | think delay in MAP client |
+
+Legacy Swing GUI simulator (manual XML): `tools/http-simulator/bin/run.sh` — still bundled in `ussdgw-test/tools/http-simulator/`.
+
+---
+
+## 8. Advanced scenarios
+
+### 8.1 Adaptive timeout
 
 **Gateway:** `sessionbridgeenabled=true`, `asyncgatetimeoutms=7000`
 
@@ -369,7 +431,7 @@ From `ussdgw-test`:
 
 **Expected:** Gate adapts to AS latency; multi-turn dialogs still complete before `dialogtimeout` (25 s).
 
-### 7.2 Bridge late-response (Channel A reconcile)
+### 8.2 Bridge late-response
 
 **AS** deliberately slower than the gate:
 
@@ -385,13 +447,13 @@ From `ussdgw-test`:
 
 Verify: gateway metrics/logs `bridge_late_*`, CDR S1 + S2. Spec: [`docs/design/bridge-unified-reconciliation-rfc.md`](design/bridge-unified-reconciliation-rfc.md).
 
-### 7.3 Direct gRPC bridge test (no MAP)
+### 8.3 Direct gRPC bridge test
 
 Use `loadtest_client.py --multi-menu` with AS `--bridge-delay 8000` — tests AS + `requestId` echo in the envelope; **does not** cover the MAP/SCTP path.
 
 ---
 
-## 8. Troubleshooting checklist
+## 9. Troubleshooting checklist
 
 | Symptom | Common cause | Fix |
 |---------|--------------|-----|
@@ -401,27 +463,28 @@ Use `loadtest_client.py --multi-menu` with AS `--bridge-delay 8000` — tests AS
 | MAP dialog timeout | Wrong SSN (147 vs 8) | Client `ussdSsn=8` |
 | Menu stuck at one turn | Single-turn AS / wrong menu | Use `ussd_as_server.py` + `menu_config.json` |
 | High `FailedScenario` | Think delay + bridge delay too long | Reduce `--bridge-delay` or increase `dialogtimeout` |
-| gRPC load 0 ok | Wrong target / AS down | Check `--target host:8443`; AS must be listening |
+| HTTP pull connection refused | HTTP AS not on 8049 | `./scripts/09-start-http-as.sh`; scrule `*519#` → `http://127.0.0.1:8049/` |
 
 **Log locations:**
 
 - MAP client: `client/maplog.txt` (Ant) or stdout / `tools/jss7-map-load/map-*.csv`
 - Gateway: `docker logs ussd-ng` or `docker logs ussdgw-e2e`
 - gRPC AS: stdout or `ussdgw-test/grpc-as.log` (use `--verbose` for detail)
+- HTTP AS: `ussdgw-test/http-as.log`
 
 ---
 
-## 9. Related documentation
+## 10. Related documentation
 
 | Document | Content |
 |----------|---------|
-| [`tools/grpc-as-tester/`](../tools/grpc-as-tester/) | AS server + load client source |
+| [`tools/http-simulator/loadtest/`](../tools/http-simulator/loadtest/) | HTTP Pull AS + Push load (auto XML) |
+| [`tools/grpc-as-tester/`](../tools/grpc-as-tester/) | gRPC AS server + load client source |
 | [`jSS7/map/load/USSD-LOADTEST.md`](../../jSS7/map/load/USSD-LOADTEST.md) | MAP load CLI reference |
-| [`docs/design/virtual-session-bridge.md`](design/virtual-session-bridge.md) | Bridge FSM + adaptive timeout |
 | [`docs/design/bridge-unified-reconciliation-rfc.md`](design/bridge-unified-reconciliation-rfc.md) | Late-response reconciliation |
 | [`release-wildfly/DEPLOY-GUIDE.md`](../release-wildfly/DEPLOY-GUIDE.md) | Docker deploy + SCTP |
 | [`ussdgw-test/README.md`](../../ussdgw-test/README.md) | Offline production test package |
 
 ---
 
-*Last updated: 2026-06-21 — multi-menu MAP load + gRPC `--multi-menu`.*
+*Last updated: 2026-06-21 — HTTP loadtest (pull/push), gRPC/MAP multi-menu.*
