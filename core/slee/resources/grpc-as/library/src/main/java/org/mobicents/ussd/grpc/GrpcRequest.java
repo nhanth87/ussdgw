@@ -36,15 +36,22 @@ public final class GrpcRequest implements Serializable {
     private final String target;
     private final String sessionId;
     private final String correlationId;
+    private final String requestId;
     private final boolean push;
     private final int networkId;
     private final byte[] payload;
 
     public GrpcRequest(String target, String sessionId, String correlationId, boolean push,
             int networkId, byte[] payload) {
+        this(target, sessionId, correlationId, null, push, networkId, payload);
+    }
+
+    public GrpcRequest(String target, String sessionId, String correlationId, String requestId,
+            boolean push, int networkId, byte[] payload) {
         this.target = target;
         this.sessionId = sessionId;
         this.correlationId = correlationId;
+        this.requestId = requestId;
         this.push = push;
         this.networkId = networkId;
         this.payload = payload;
@@ -61,6 +68,11 @@ public final class GrpcRequest implements Serializable {
 
     public String getCorrelationId() {
         return correlationId;
+    }
+
+    /** The per-request id the AS must echo on a late response so the bridge can reconcile it. */
+    public String getRequestId() {
+        return requestId;
     }
 
     public boolean isPush() {

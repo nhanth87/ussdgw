@@ -44,7 +44,94 @@ public final class BridgeMetrics {
     private final AtomicLong sessionsCompleted = new AtomicLong();
     private final AtomicLong sessionsExpired = new AtomicLong();
 
+    // Unified late-response reconciliation (RFC §9) — per channel + outcomes.
+    private final AtomicLong lateSyncHttp = new AtomicLong();
+    private final AtomicLong lateSyncGrpc = new AtomicLong();
+    private final AtomicLong lateSyncSip = new AtomicLong();
+    private final AtomicLong latePushHttp = new AtomicLong();
+    private final AtomicLong latePushSip = new AtomicLong();
+    private final AtomicLong lateDuplicate = new AtomicLong();
+    private final AtomicLong lateAborted = new AtomicLong();
+    private final AtomicLong lateExpired = new AtomicLong();
+    private final AtomicLong lateStale = new AtomicLong();
+    private final AtomicLong sessionsAborted = new AtomicLong();
+
     private BridgeMetrics() {
+    }
+
+    /** Count a successful reconcile on the given channel. */
+    public void incLateReconciled(ReconcileChannel channel) {
+        if (channel == null) {
+            return;
+        }
+        switch (channel) {
+            case SYNC_HTTP: lateSyncHttp.incrementAndGet(); break;
+            case SYNC_GRPC: lateSyncGrpc.incrementAndGet(); break;
+            case SYNC_SIP:  lateSyncSip.incrementAndGet(); break;
+            case PUSH_HTTP: latePushHttp.incrementAndGet(); break;
+            case PUSH_SIP:  latePushSip.incrementAndGet(); break;
+            default: break;
+        }
+    }
+
+    public void incLateDuplicate() {
+        lateDuplicate.incrementAndGet();
+    }
+
+    public void incLateAborted() {
+        lateAborted.incrementAndGet();
+    }
+
+    public void incLateExpired() {
+        lateExpired.incrementAndGet();
+    }
+
+    public void incLateStale() {
+        lateStale.incrementAndGet();
+    }
+
+    public void incSessionsAborted() {
+        sessionsAborted.incrementAndGet();
+    }
+
+    public long getLateSyncHttp() {
+        return lateSyncHttp.get();
+    }
+
+    public long getLateSyncGrpc() {
+        return lateSyncGrpc.get();
+    }
+
+    public long getLateSyncSip() {
+        return lateSyncSip.get();
+    }
+
+    public long getLatePushHttp() {
+        return latePushHttp.get();
+    }
+
+    public long getLatePushSip() {
+        return latePushSip.get();
+    }
+
+    public long getLateDuplicate() {
+        return lateDuplicate.get();
+    }
+
+    public long getLateAborted() {
+        return lateAborted.get();
+    }
+
+    public long getLateExpired() {
+        return lateExpired.get();
+    }
+
+    public long getLateStale() {
+        return lateStale.get();
+    }
+
+    public long getSessionsAborted() {
+        return sessionsAborted.get();
     }
 
     public void incBridgesStarted() {
@@ -139,6 +226,11 @@ public final class BridgeMetrics {
                 + ", lateCallbacks=" + lateCallbacks + ", duplicateCallbacks=" + duplicateCallbacks
                 + ", pushRetries=" + pushRetries + ", pushRejected=" + pushRejected
                 + ", fallback=" + fallbackNotifications + ", doubleSubmitBlocked=" + doubleSubmitBlocked
-                + ", completed=" + sessionsCompleted + ", expired=" + sessionsExpired + "]";
+                + ", completed=" + sessionsCompleted + ", expired=" + sessionsExpired
+                + ", aborted=" + sessionsAborted
+                + ", lateSync(http/grpc/sip)=" + lateSyncHttp + "/" + lateSyncGrpc + "/" + lateSyncSip
+                + ", latePush(http/sip)=" + latePushHttp + "/" + latePushSip
+                + ", lateDup=" + lateDuplicate + ", lateAborted=" + lateAborted
+                + ", lateExpired=" + lateExpired + ", lateStale=" + lateStale + "]";
     }
 }

@@ -229,30 +229,31 @@ public abstract class HttpServerSbb extends ChildServerSbb implements SriParent 
 
 			this.setMsisdnCMP(msisdn);
 
-			// Virtual Session Bridge: an inbound push carrying a request id is the AS async
-			// callback (S2) for a previously bridged MO interaction. Apply idempotency and an
-			// active-session priority check before pushing.
+			// Virtual Session Bridge: an inbound push carrying a request id is a late AS response
+			// (Channel B) for a previously bridged MO interaction. Reconcile it atomically through
+			// the unified reconciler — idempotency, network-abort, ordering and active-session
+			// priority are all decided in one place (RFC §5/§13). A push WITHOUT a request id is a
+			// cold NI push and falls through to the legacy flow unchanged.
 			org.mobicents.ussdgateway.slee.SessionBridgeSupport bridge =
 					org.mobicents.ussdgateway.slee.SessionBridgeSupport.getInstance();
 			String bridgeCorrelationId = null;
 			if (bridge.isEnabled()) {
 				String requestId = event.getRequest().getHeader("X-Ussd-Request-Id");
 				if (requestId != null) {
-					org.mobicents.ussdgateway.bridge.VirtualSession vs = bridge.onAsyncCallback(requestId);
-					if (vs == null) {
-						// duplicate / unknown / expired callback: acknowledge without pushing again
+					int inputGen = parseInputGeneration(event.getRequest().getHeader("X-Ussd-Input-Gen"));
+					// payload is already deserialized into xmlMAPDialog below; pass null here (the
+					// retry path falls back to the service code when no cached menu is present).
+					org.mobicents.ussdgateway.bridge.ReconcileResult rr = bridge.reconcileLateResponse(
+							requestId, null,
+							org.mobicents.ussdgateway.bridge.ReconcileChannel.PUSH_HTTP, inputGen);
+					if (rr.shouldPush()) {
+						bridgeCorrelationId = rr.getSession().getCorrelationId();
+					} else {
+						// DUPLICATE / UNKNOWN / EXPIRED / ABORTED / STALE / QUEUED: ack, no push.
 						ackHttpCallback();
 						success = true;
 						return;
 					}
-					if (!bridge.shouldDeliverNow(vs)) {
-						// a higher-priority MO session is active: queue the push back
-						bridge.enqueuePushRetry(vs.getCorrelationId(), vs.getMsisdn(), serviceCode);
-						ackHttpCallback();
-						success = true;
-						return;
-					}
-					bridgeCorrelationId = vs.getCorrelationId();
 				}
 			}
 
@@ -1273,7 +1274,19 @@ public abstract class HttpServerSbb extends ChildServerSbb implements SriParent 
         }
     }
 
-    /** Acknowledge an AS async callback (duplicate or queued-back) with HTTP 200, no push. */
+    /** Parse the optional {@code X-Ussd-Input-Gen} ordering header; absent/invalid → no check. */
+    private int parseInputGeneration(String header) {
+        if (header != null) {
+            try {
+                return Integer.parseInt(header.trim());
+            } catch (NumberFormatException ignore) {
+                // fall through to no-generation
+            }
+        }
+        return org.mobicents.ussdgateway.bridge.BridgeReconciler.NO_GENERATION;
+    }
+
+    /** Acknowledge a late AS response (duplicate / queued / aborted / stale) with HTTP 200, no push. */
     private void ackHttpCallback() {
         EventContext httpEventContext = this.resumeHttpEventContext();
         if (httpEventContext != null) {

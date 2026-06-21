@@ -104,6 +104,34 @@ public final class InMemoryVirtualSessionStore implements VirtualSessionStore {
     }
 
     @Override
+    public VirtualSession compareAndTransition(String correlationId, FsmState expected, FsmState next) {
+        if (correlationId == null || expected == null || next == null) {
+            return null;
+        }
+        final long now = System.currentTimeMillis();
+        // ConcurrentHashMap.compute runs atomically for the key, giving us the CAS guarantee.
+        final VirtualSession[] result = new VirtualSession[1];
+        sessions.compute(correlationId, new java.util.function.BiFunction<String, Expiring<VirtualSession>, Expiring<VirtualSession>>() {
+            @Override
+            public Expiring<VirtualSession> apply(String key, Expiring<VirtualSession> current) {
+                if (current == null || current.isExpired(now)) {
+                    return null;
+                }
+                VirtualSession s = current.value;
+                if (s.getFsmState() != expected) {
+                    return current;
+                }
+                if (!s.transitionTo(next)) {
+                    return current;
+                }
+                result[0] = s;
+                return new Expiring<VirtualSession>(s, current.expireAtMillis);
+            }
+        });
+        return result[0];
+    }
+
+    @Override
     public boolean tryLock(String msisdn, String correlationId, long ttlMillis) {
         if (msisdn == null) {
             return true;

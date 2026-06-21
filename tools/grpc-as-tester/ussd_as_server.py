@@ -88,10 +88,17 @@ class MenuEngine:
 class UssdProcessor:
     """gRPC handler implementing the raw-bytes Process method."""
 
-    def __init__(self, engine: MenuEngine, min_delay_ms: int, max_delay_ms: int):
+    def __init__(self, engine: MenuEngine, min_delay_ms: int, max_delay_ms: int,
+                 bridge_delay_ms: int = 0, bridge_every: int = 0):
         self.engine = engine
         self.min_delay_ms = min_delay_ms
         self.max_delay_ms = max_delay_ms
+        # When > 0, deliberately sleep this long to exceed the gateway's adaptive gate so the
+        # Virtual Session Bridge releases S1 and the (late) response is reconciled via Channel A.
+        self.bridge_delay_ms = bridge_delay_ms
+        # Apply the bridge delay to 1-in-N requests (0 = never, 1 = always).
+        self.bridge_every = bridge_every
+        self._counter = 0
 
     def process(self, request_bytes: bytes, context) -> bytes:
         try:
@@ -102,9 +109,15 @@ class UssdProcessor:
 
         session_id = envelope.get("sessionId") or envelope.get("correlationId") or "unknown"
         correlation_id = envelope.get("correlationId") or session_id
+        # Echo the request id so the gateway can reconcile a late response exactly-once (RFC §4).
+        request_id = envelope.get("requestId")
 
-        # adaptive / random AS processing latency
-        if self.max_delay_ms > 0:
+        # Optionally emulate a slow AS that overruns the gate (exercises the bridge / Channel A).
+        if self.bridge_delay_ms > 0 and self._should_bridge():
+            LOG.info("Bridging delay %d ms for requestId=%s", self.bridge_delay_ms, request_id)
+            time.sleep(self.bridge_delay_ms / 1000.0)
+        elif self.max_delay_ms > 0:
+            # adaptive / random AS processing latency
             lo = max(0, self.min_delay_ms)
             hi = max(lo, self.max_delay_ms)
             time.sleep(random.randint(lo, hi) / 1000.0)
@@ -120,7 +133,13 @@ class UssdProcessor:
             user_object="sessionId=%s" % session_id,
             network_id=parsed.get("network_id", 0),
         )
-        return env.encode_response(correlation_id, response_xml, success=True)
+        return env.encode_response(correlation_id, response_xml, success=True, request_id=request_id)
+
+    def _should_bridge(self) -> bool:
+        if self.bridge_every <= 0:
+            return False
+        self._counter += 1
+        return (self._counter % self.bridge_every) == 0
 
 
 def build_server(processor: UssdProcessor, port: int, workers: int) -> grpc.Server:
@@ -148,6 +167,10 @@ def main():
     ap.add_argument("--workers", type=int, default=64, help="gRPC server thread pool size")
     ap.add_argument("--min-delay", type=int, default=1, help="min adaptive delay (ms)")
     ap.add_argument("--max-delay", type=int, default=100, help="max adaptive delay (ms)")
+    ap.add_argument("--bridge-delay", type=int, default=0,
+                    help="deliberate delay (ms) to overrun the gateway gate and exercise the bridge")
+    ap.add_argument("--bridge-every", type=int, default=0,
+                    help="apply --bridge-delay to 1-in-N requests (0=never, 1=always)")
     ap.add_argument("--menu-config", default="menu_config.json")
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args()
@@ -159,11 +182,13 @@ def main():
         config = json.load(f)
 
     engine = MenuEngine(config)
-    processor = UssdProcessor(engine, args.min_delay, args.max_delay)
+    processor = UssdProcessor(engine, args.min_delay, args.max_delay,
+                             bridge_delay_ms=args.bridge_delay, bridge_every=args.bridge_every)
     server = build_server(processor, args.port, args.workers)
     server.start()
-    LOG.info("USSD gRPC AS listening on :%d (workers=%d, delay=%d-%d ms, menu=%s)",
-             args.port, args.workers, args.min_delay, args.max_delay, args.menu_config)
+    LOG.info("USSD gRPC AS listening on :%d (workers=%d, delay=%d-%d ms, bridge=%d ms/1-in-%d, menu=%s)",
+             args.port, args.workers, args.min_delay, args.max_delay,
+             args.bridge_delay, args.bridge_every, args.menu_config)
     try:
         while True:
             time.sleep(3600)

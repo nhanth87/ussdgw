@@ -116,7 +116,8 @@ public class GrpcAsResourceAdaptor implements ResourceAdaptor {
             public void onCompleted() {
                 Map<String, String> env = GrpcEnvelopeCodec.decode(last);
                 byte[] payload = GrpcEnvelopeCodec.decodePayload(env.get(GrpcEnvelopeCodec.F_PAYLOAD));
-                registry.put(GrpcResponse.ok(correlationId, payload));
+                String echoedRequestId = env.get(GrpcEnvelopeCodec.F_REQUEST_ID);
+                registry.put(GrpcResponse.ok(correlationId, echoedRequestId, payload));
             }
         });
     }

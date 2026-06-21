@@ -326,6 +326,10 @@ public abstract class ChildSbb extends USSDBaseSbb implements ChildInterface {
 
         this.updateDialogFailureStat();
 
+		// Virtual Session Bridge: the subscriber/network ended the MO dialogue before we bridged it.
+		// Mark the session ABORTED so a late AS response is dropped, never pushed (RFC §13.2).
+		this.markBridgeAborted();
+
 		this.createCDRRecord(RecordStatus.FAILED_DIALOG_USER_ABORT);
 	}
 
@@ -348,6 +352,9 @@ public abstract class ChildSbb extends USSDBaseSbb implements ChildInterface {
 		this.terminateProtocolConnection();
 
         this.updateDialogFailureStat();
+
+		// Virtual Session Bridge: network tore down the MO dialogue before we bridged it (RFC §13.2).
+		this.markBridgeAborted();
 
 		// TODO: CDR, how this should be covered?
 		// TODO : Should we add any xml content?
@@ -643,6 +650,29 @@ public abstract class ChildSbb extends USSDBaseSbb implements ChildInterface {
 		// CDR S1: dialogue released early; reconciliation continues out of band via the NI push.
 		this.submitBridgeCdr(RecordStatus.FAILED_APP_TIMEOUT, correlationId,
 				org.mobicents.ussdgateway.bridge.BridgePhase.S1_RELEASED.name());
+	}
+
+	/**
+	 * Virtual Session Bridge: mark the in-flight MO session ABORTED because the network ended the
+	 * dialogue before the gateway bridged it. No-op when the feature is off or there is no tracked
+	 * session. Only the pre-bridge states are affected (see {@code BridgeReconciler#markAborted}).
+	 */
+	protected void markBridgeAborted() {
+		try {
+			SessionBridgeSupport bridge = SessionBridgeSupport.getInstance();
+			if (!bridge.isEnabled()) {
+				return;
+			}
+			USSDCDRState state = getOrCreateLocalRaCdrState();
+			String correlationId = state != null ? state.getCorrelationId() : null;
+			if (correlationId != null) {
+				bridge.markAborted(correlationId);
+			}
+		} catch (Throwable t) {
+			if (logger != null) {
+				logger.warning("Bridge markAborted failed: " + t.getMessage());
+			}
+		}
 	}
 
 	// ///////////////////

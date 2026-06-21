@@ -38,7 +38,9 @@ def _sample_request(i: int) -> bytes:
         '<processUnstructuredSSRequest_Request invokeId="1" dataCodingScheme="15">'
         '<string>*100#</string></processUnstructuredSSRequest_Request></dialog>' % (i,)
     ).encode("utf-8")
-    return env.encode_request(session_id, session_id, dialog, push=False, network_id=0)
+    request_id = "r-%s" % session_id
+    return env.encode_request(session_id, session_id, dialog, push=False, network_id=0,
+                              request_id=request_id)
 
 
 async def _run_worker(target: str, tps: int, duration: int, max_inflight: int, result_q):

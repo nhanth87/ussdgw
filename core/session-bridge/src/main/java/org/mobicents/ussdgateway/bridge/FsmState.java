@@ -26,7 +26,14 @@ package org.mobicents.ussdgateway.bridge;
  * CREATED -> WAIT_USER -> WAIT_AS -> COMPLETED
  *                            |-> BRIDGED -> PUSH_PENDING -> COMPLETED | FAILED
  *                            |-> EXPIRED
+ *                            |-> ABORTED   (network/MSC tore down the dialogue)
  * </pre>
+ *
+ * {@code ABORTED} is terminal and distinct from {@code EXPIRED}: {@code EXPIRED} means our TTL
+ * elapsed with no AS response, whereas {@code ABORTED} means the <em>network</em> ended the
+ * transaction (MAP/TCAP/Provider/User Abort). A late AS response landing on an {@code ABORTED}
+ * session must be dropped — pushing it would reopen a dialogue the MSC already considers closed
+ * (RFC §13.2).
  */
 public enum FsmState {
 
@@ -37,13 +44,14 @@ public enum FsmState {
     PUSH_PENDING,
     COMPLETED,
     FAILED,
-    EXPIRED;
+    EXPIRED,
+    ABORTED;
 
     /**
      * @return {@code true} if no further transitions are allowed from this state.
      */
     public boolean isTerminal() {
-        return this == COMPLETED || this == FAILED || this == EXPIRED;
+        return this == COMPLETED || this == FAILED || this == EXPIRED || this == ABORTED;
     }
 
     /**
@@ -57,15 +65,18 @@ public enum FsmState {
         }
         switch (this) {
             case CREATED:
-                return next == WAIT_USER || next == WAIT_AS || next == EXPIRED || next == FAILED;
+                return next == WAIT_USER || next == WAIT_AS || next == EXPIRED || next == FAILED
+                        || next == ABORTED;
             case WAIT_USER:
-                return next == WAIT_AS || next == EXPIRED || next == FAILED || next == COMPLETED;
+                return next == WAIT_AS || next == EXPIRED || next == FAILED || next == COMPLETED
+                        || next == ABORTED;
             case WAIT_AS:
-                return next == COMPLETED || next == BRIDGED || next == EXPIRED || next == FAILED;
+                return next == COMPLETED || next == BRIDGED || next == EXPIRED || next == FAILED
+                        || next == ABORTED;
             case BRIDGED:
-                return next == PUSH_PENDING || next == EXPIRED || next == FAILED;
+                return next == PUSH_PENDING || next == EXPIRED || next == FAILED || next == ABORTED;
             case PUSH_PENDING:
-                return next == COMPLETED || next == FAILED || next == EXPIRED;
+                return next == COMPLETED || next == FAILED || next == EXPIRED || next == ABORTED;
             default:
                 return false;
         }

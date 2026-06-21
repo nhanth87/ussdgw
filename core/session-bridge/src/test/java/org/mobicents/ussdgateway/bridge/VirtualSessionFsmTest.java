@@ -71,4 +71,55 @@ public class VirtualSessionFsmTest {
         assertFalse(s.isExpired(s.getCreatedAtMillis()));
         assertTrue(s.isExpired(s.getCreatedAtMillis() + 51));
     }
+
+    @Test
+    public void networkAbortFromWaitAsIsTerminal() {
+        VirtualSession s = new VirtualSession("c6", "c6", "8496", 180000);
+        s.transitionTo(FsmState.WAIT_USER);
+        s.transitionTo(FsmState.WAIT_AS);
+        assertTrue(s.transitionTo(FsmState.ABORTED));
+        assertTrue(s.getFsmState().isTerminal());
+        // No transitions out of ABORTED (cannot be reopened for a push).
+        assertFalse(s.transitionTo(FsmState.PUSH_PENDING));
+        assertFalse(s.transitionTo(FsmState.BRIDGED));
+    }
+
+    @Test
+    public void bridgedCanAbortButAbortedNeverPushes() {
+        VirtualSession s = new VirtualSession("c7", "c7", "8497", 180000);
+        s.transitionTo(FsmState.WAIT_USER);
+        s.transitionTo(FsmState.WAIT_AS);
+        s.transitionTo(FsmState.BRIDGED);
+        assertTrue(s.transitionTo(FsmState.ABORTED));
+        assertFalse(s.transitionTo(FsmState.PUSH_PENDING));
+    }
+
+    @Test
+    public void inputGenerationIsMonotonic() {
+        VirtualSession s = new VirtualSession("c8", "c8", "8498", 180000);
+        assertEquals(s.getInputGeneration(), 0);
+        assertEquals(s.incrementInputGeneration(), 1);
+        assertEquals(s.incrementInputGeneration(), 2);
+        assertEquals(s.getInputGeneration(), 2);
+    }
+
+    @Test
+    public void copyConstructorPreservesState() {
+        VirtualSession s = new VirtualSession("c9", "c9", "8499", 180000);
+        s.transitionTo(FsmState.WAIT_USER);
+        s.transitionTo(FsmState.WAIT_AS);
+        s.transitionTo(FsmState.BRIDGED);
+        s.setPendingRequestId("r9");
+        s.setInputGeneration(3);
+        s.setLastMenu("menu");
+        VirtualSession copy = new VirtualSession(s);
+        assertEquals(copy.getCorrelationId(), "c9");
+        assertEquals(copy.getFsmState(), FsmState.BRIDGED);
+        assertEquals(copy.getPendingRequestId(), "r9");
+        assertEquals(copy.getInputGeneration(), 3);
+        assertEquals(copy.getLastMenu(), "menu");
+        // Mutating the copy must not affect the original (copy-on-write CAS safety).
+        copy.transitionTo(FsmState.PUSH_PENDING);
+        assertEquals(s.getFsmState(), FsmState.BRIDGED);
+    }
 }

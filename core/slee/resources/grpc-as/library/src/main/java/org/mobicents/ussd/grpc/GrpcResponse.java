@@ -31,22 +31,29 @@ public final class GrpcResponse implements Serializable {
 
     private final boolean success;
     private final String correlationId;
+    private final String requestId;
     private final byte[] payload;
     private final String errorMessage;
 
-    private GrpcResponse(boolean success, String correlationId, byte[] payload, String errorMessage) {
+    private GrpcResponse(boolean success, String correlationId, String requestId, byte[] payload,
+            String errorMessage) {
         this.success = success;
         this.correlationId = correlationId;
+        this.requestId = requestId;
         this.payload = payload;
         this.errorMessage = errorMessage;
     }
 
     public static GrpcResponse ok(String correlationId, byte[] payload) {
-        return new GrpcResponse(true, correlationId, payload, null);
+        return new GrpcResponse(true, correlationId, null, payload, null);
+    }
+
+    public static GrpcResponse ok(String correlationId, String requestId, byte[] payload) {
+        return new GrpcResponse(true, correlationId, requestId, payload, null);
     }
 
     public static GrpcResponse error(String correlationId, String errorMessage) {
-        return new GrpcResponse(false, correlationId, null, errorMessage);
+        return new GrpcResponse(false, correlationId, null, null, errorMessage);
     }
 
     public boolean isSuccess() {
@@ -55,6 +62,11 @@ public final class GrpcResponse implements Serializable {
 
     public String getCorrelationId() {
         return correlationId;
+    }
+
+    /** The request id echoed by the AS (Channel A sync reconcile key); may be {@code null}. */
+    public String getRequestId() {
+        return requestId;
     }
 
     public byte[] getPayload() {
