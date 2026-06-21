@@ -38,6 +38,7 @@ services:
     volumes:
       - /opt/ussdgw/data:/opt/ussdgw/data
       - /opt/ussdgw/log:/opt/ussdgw/log
+      - /opt/ussdgw/configuration:/opt/ussdgw/configuration
       - /opt/ussdgw/standalone.conf:/opt/ussdgw/standalone.conf:ro
       - /opt/ussdgw/patched_jar:/opt/ussdgw/patched_jar:ro
       - /opt/ussdgw/config-seed:/opt/ussdgw/config-seed:ro

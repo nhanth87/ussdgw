@@ -4,7 +4,7 @@
   <serveroverloadedmsg>Server is overloaded. Please try later</serveroverloadedmsg>
   <servererrmssg>Server error, please try again after sometime</servererrmssg>
   <dialogtimeouterrmssg>Request timeout please try again after sometime.</dialogtimeouterrmssg>
-  <dialogtimeout>25000</dialogtimeout>
+  <dialogtimeout>60000</dialogtimeout>
   <ussdgt>923330053058</ussdgt>
   <ussdssn>8</ussdssn>
   <hlrssn>6</hlrssn>
@@ -12,11 +12,5 @@
   <maxmapv>3</maxmapv>
   <cdrloggingto>Textfile</cdrloggingto>
   <cdrSeparator>:</cdrSeparator>
-  <maxactivitycount>5000</maxactivitycount>
-  <sessionbridgeenabled>false</sessionbridgeenabled>
-  <asyncgatetimeoutms>7000</asyncgatetimeoutms>
-  <asyncwaitusermessage>Hệ thống đang bận, sẽ update lại cho bạn ngay</asyncwaitusermessage>
-  <asynchardfailmessage>Hệ thống đang có nhiều người sử dụng, vui lòng dùng lại sau</asynchardfailmessage>
-  <bridgestatettlsec>180</bridgestatettlsec>
-  <pushretrydelaysms>3000,8000,15000</pushretrydelaysms>
+  <maxactivitycount>12000</maxactivitycount>
 </HashMap>

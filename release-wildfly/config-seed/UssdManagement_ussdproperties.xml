@@ -4,7 +4,8 @@
   <serveroverloadedmsg>Server is overloaded. Please try later</serveroverloadedmsg>
   <servererrmssg>Server error, please try again after sometime</servererrmssg>
   <dialogtimeouterrmssg>Request timeout please try again after sometime.</dialogtimeouterrmssg>
-  <dialogtimeout>25000</dialogtimeout>
+  <!-- 60s AS timeout headroom for 1000 TPS (must be &lt;= TCAP dialogTimeout) -->
+  <dialogtimeout>60000</dialogtimeout>
   <ussdgt>923330053058</ussdgt>
   <ussdssn>8</ussdssn>
   <hlrssn>6</hlrssn>
@@ -12,5 +13,6 @@
   <maxmapv>3</maxmapv>
   <cdrloggingto>Textfile</cdrloggingto>
   <cdrSeparator>:</cdrSeparator>
-  <maxactivitycount>5000</maxactivitycount>
+  <!-- 1000 TPS @ ~10s avg session: concurrent MAP dialogs ~10k + headroom -->
+  <maxactivitycount>12000</maxactivitycount>
 </HashMap>

@@ -8,8 +8,33 @@ init_host_dirs() {
     local log="${base}/log"
     local conf_mount="${base}/standalone.conf"
     local patch_mirror="${base}/patched_jar/mirror"
+    local cfg_host="${base}/configuration"
+    local cfg_seed="${base}/config-seed/configuration"
+    local cfg_wf="${JBOSS_HOME}/standalone/configuration"
 
-    mkdir -p "$data" "$log" "$patch_mirror"
+    mkdir -p "$data" "$log" "$patch_mirror" "$cfg_host"
+
+    # Seed WildFly mgmt users from config-seed/configuration on first install
+    if [ -d "$cfg_seed" ]; then
+        for f in "$cfg_seed"/*; do
+            [ -f "$f" ] || continue
+            name=$(basename "$f")
+            if [ ! -f "${cfg_host}/${name}" ]; then
+                cp -f "$f" "${cfg_host}/"
+                echo "[init] Seeded ${name} -> ${cfg_host}/"
+            fi
+        done
+    fi
+
+    # Overlay host /opt/ussdgw/configuration -> WildFly standalone/configuration every start
+    if [ -d "$cfg_host" ]; then
+        for f in "$cfg_host"/*; do
+            [ -f "$f" ] || continue
+            name=$(basename "$f")
+            cp -f "$f" "${cfg_wf}/${name}"
+            echo "[init] ${cfg_wf}/${name} <- ${cfg_host}/${name}"
+        done
+    fi
 
     # Seed SS7/USSD XML when data/ is empty (first install)
     if [ -d "$seed" ] && [ -n "$(ls -A "$seed" 2>/dev/null)" ]; then
@@ -45,8 +70,9 @@ init_host_dirs() {
     echo "[init] ${JBOSS_HOME}/standalone/log  -> ${log}"
 
     if [ "$(id -u)" = "0" ]; then
-        chown -R ussdgw:ussdgw "$data" "$log" "$patch_mirror" 2>/dev/null || true
+        chown -R ussdgw:ussdgw "$data" "$log" "$patch_mirror" "$cfg_host" 2>/dev/null || true
         chown ussdgw:ussdgw "${JBOSS_HOME}/bin/standalone.conf" 2>/dev/null || true
+        chown ussdgw:ussdgw "${cfg_wf}/mgmt-users.properties" "${cfg_wf}/mgmt-groups.properties" 2>/dev/null || true
     fi
 }
 

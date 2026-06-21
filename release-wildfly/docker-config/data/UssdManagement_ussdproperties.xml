@@ -4,7 +4,7 @@
   <serveroverloadedmsg>Server is overloaded. Please try later</serveroverloadedmsg>
   <servererrmssg>Server error, please try again after sometime</servererrmssg>
   <dialogtimeouterrmssg>Request timeout please try again after sometime.</dialogtimeouterrmssg>
-  <dialogtimeout>25000</dialogtimeout>
+  <dialogtimeout>60000</dialogtimeout>
   <ussdgt>923330053058</ussdgt>
   <ussdssn>8</ussdssn>
   <hlrssn>6</hlrssn>
@@ -12,5 +12,5 @@
   <maxmapv>3</maxmapv>
   <cdrloggingto>Textfile</cdrloggingto>
   <cdrSeparator>:</cdrSeparator>
-  <maxactivitycount>5000</maxactivitycount>
+  <maxactivitycount>12000</maxactivitycount>
 </HashMap>
