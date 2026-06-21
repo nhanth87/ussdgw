@@ -330,6 +330,11 @@ behaves exactly as before (no bridge, no early release).
 
 ## 9. AS Contract
 
+> **⚠️ Superseded for implementation:** §9 below describes Phase 1 MVP intent. Approved redesign
+> (single push endpoint, sync-channel reconcile after gate, no `/ussd/async-response`) is in
+> [`bridge-unified-reconciliation-rfc.md`](bridge-unified-reconciliation-rfc.md). **Do not implement
+> from this section until RFC is approved.**
+
 ### Request (gateway → AS)
 
 The existing HTTP request gains two headers / fields:
@@ -343,18 +348,12 @@ X-Ussd-Correlation-Id: <correlationId>
 
 Normal body as today. Gateway delivers on S1.
 
-### Asynchronous callback (AS → gateway, after gate)
+### ~~Asynchronous callback~~ Late response (after gate) — see RFC
 
-```
-POST /ussd/async-response
-X-Ussd-Request-Id: <requestId>
-X-Ussd-Correlation-Id: <correlationId>
-Content-Type: application/xml | application/json
-
-<ussd payload>
-```
-
-Idempotency: the AS may retry the callback; the gateway applies it once per `requestId`.
+Phase 1 code uses the **existing USSD Push servlet** (e.g. `POST /ussdhttpdemo/`) with
+`X-Ussd-Request-Id`, not a separate `/ussd/async-response` URL. Phase 2 RFC adds **Channel A**
+(sync response on the same MO HTTP/gRPC/SIP connection after gate) so AS is not forced to POST
+again when the transport is still alive.
 
 ---
 
