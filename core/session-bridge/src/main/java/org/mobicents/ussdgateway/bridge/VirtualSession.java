@@ -44,6 +44,7 @@ public final class VirtualSession implements Serializable {
     private SessionPriority priority;
     private final List<Long> networkDialogIds;
     private int attempt;
+    private int inputGeneration;
     private final long createdAtMillis;
     private long expireAtMillis;
 
@@ -56,8 +57,32 @@ public final class VirtualSession implements Serializable {
         this.priority = SessionPriority.ACTIVE_PULL;
         this.networkDialogIds = new ArrayList<Long>(2);
         this.attempt = 0;
+        this.inputGeneration = 0;
         this.createdAtMillis = System.currentTimeMillis();
         this.expireAtMillis = this.createdAtMillis + ttlMillis;
+    }
+
+    /**
+     * Deep-ish copy used by stores that perform copy-on-write compare-and-swap (e.g. Infinispan):
+     * a fresh instance is produced for the new state so the previously stored reference stays
+     * immutable for the CAS comparison.
+     */
+    public VirtualSession(VirtualSession other) {
+        this.virtualSessionId = other.virtualSessionId;
+        this.correlationId = other.correlationId;
+        this.msisdn = other.msisdn;
+        this.imsi = other.imsi;
+        this.serviceCode = other.serviceCode;
+        this.lastMenu = other.lastMenu;
+        this.lastInput = other.lastInput;
+        this.pendingRequestId = other.pendingRequestId;
+        this.fsmState = other.fsmState;
+        this.priority = other.priority;
+        this.networkDialogIds = new ArrayList<Long>(other.networkDialogIds);
+        this.attempt = other.attempt;
+        this.inputGeneration = other.inputGeneration;
+        this.createdAtMillis = other.createdAtMillis;
+        this.expireAtMillis = other.expireAtMillis;
     }
 
     public String getVirtualSessionId() {
@@ -148,6 +173,23 @@ public final class VirtualSession implements Serializable {
         return ++attempt;
     }
 
+    /**
+     * Monotonic counter of user inputs in this business session. Each new MO input bumps it and
+     * stamps the {@code requestId}; a late response carrying an older generation is stale and must
+     * be dropped to preserve menu ordering (RFC §13.3).
+     */
+    public int getInputGeneration() {
+        return inputGeneration;
+    }
+
+    public int incrementInputGeneration() {
+        return ++inputGeneration;
+    }
+
+    public void setInputGeneration(int inputGeneration) {
+        this.inputGeneration = inputGeneration;
+    }
+
     public long getCreatedAtMillis() {
         return createdAtMillis;
     }
@@ -181,6 +223,7 @@ public final class VirtualSession implements Serializable {
     public String toString() {
         return "VirtualSession[vsid=" + virtualSessionId + ", correlationId=" + correlationId
                 + ", msisdn=" + msisdn + ", state=" + fsmState + ", priority=" + priority
-                + ", pendingRequestId=" + pendingRequestId + ", attempt=" + attempt + "]";
+                + ", pendingRequestId=" + pendingRequestId + ", attempt=" + attempt
+                + ", inputGen=" + inputGeneration + "]";
     }
 }

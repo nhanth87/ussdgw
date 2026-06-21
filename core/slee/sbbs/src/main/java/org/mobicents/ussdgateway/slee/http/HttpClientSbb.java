@@ -52,6 +52,7 @@ import org.mobicents.ussdgateway.XmlMAPDialog;
 import org.mobicents.ussdgateway.rules.ScRoutingRule;
 import org.mobicents.ussdgateway.slee.ChildSbb;
 import org.mobicents.ussdgateway.slee.cdr.RecordStatus;
+import org.mobicents.ussdgateway.slee.cdr.USSDCDRState;
 
 /**
  * 
@@ -104,11 +105,22 @@ public abstract class HttpClientSbb extends ChildSbb {
 				+ " finalMessageSent=" + this.getFinalMessageSent());
 		}
 		if (mapDialogSupplementary == null) {
+			// Virtual Session Bridge Channel A: the MO dialogue is gone (gate fired, S1 released),
+			// but this synchronous AS response may still carry the menu. Try to reconcile it into an
+			// NI push (S2) instead of dropping it. Falls through to the legacy drop when not handled.
+			if (tryBridgeSyncReconcile(response)) {
+				httpClientActivity.endActivity();
+				return;
+			}
 			logger.warning("JENNY-HTTP-RESPONSE: MAP dialog is null, dialog may have been released or timed out. Skipping response processing.");
 			httpClientActivity.endActivity();
 			return;
 		}
 		if (mapDialogSupplementary.getState() == org.restcomm.protocols.ss7.map.api.dialog.MAPDialogState.EXPUNGED) {
+			if (tryBridgeSyncReconcile(response)) {
+				httpClientActivity.endActivity();
+				return;
+			}
 			logger.warning("JENNY-HTTP-RESPONSE: MAP dialog state is EXPUNGED, dialog was terminated. Skipping response processing.");
 			httpClientActivity.endActivity();
 			return;
@@ -404,6 +416,52 @@ super.ussdStatAggregator.updateUssdNotifyOperations();
 
 	private byte[] getResultData(HttpEntity entity) throws IOException {
 		return EntityUtils.toByteArray(entity);
+	}
+
+	/**
+	 * Virtual Session Bridge Channel A: attempt to reconcile a synchronous AS response that arrived
+	 * after the gate (the MO dialogue has already been released). On success the reconciler
+	 * dispatches an NI push (S2) carrying this menu. Returns {@code true} when the bridge recognised
+	 * and consumed the response (caller should stop), {@code false} to fall back to legacy handling.
+	 */
+	private boolean tryBridgeSyncReconcile(HttpResponse response) {
+		try {
+			org.mobicents.ussdgateway.slee.SessionBridgeSupport bridge =
+					org.mobicents.ussdgateway.slee.SessionBridgeSupport.getInstance();
+			if (!bridge.isEnabled()) {
+				return false;
+			}
+			USSDCDRState state = getOrCreateLocalRaCdrState();
+			String correlationId = state != null ? state.getCorrelationId() : null;
+			if (correlationId == null) {
+				return false;
+			}
+			String requestId = bridge.requestIdFor(correlationId);
+			if (requestId == null) {
+				return false;
+			}
+			byte[] body = null;
+			if (response != null && response.getStatusLine() != null
+					&& response.getStatusLine().getStatusCode() == 200 && response.getEntity() != null) {
+				try {
+					body = getResultData(response.getEntity());
+				} catch (Exception e) {
+					if (logger.isFineEnabled()) {
+						logger.fine("Bridge sync reconcile: failed to read body: " + e.getMessage());
+					}
+				}
+			}
+			int gen = bridge.currentInputGeneration(correlationId);
+			org.mobicents.ussdgateway.bridge.ReconcileResult rr = bridge.reconcileLateResponse(
+					requestId, body, org.mobicents.ussdgateway.bridge.ReconcileChannel.SYNC_HTTP, gen);
+			if (logger.isFineEnabled()) {
+				logger.fine("Bridge sync reconcile (HTTP) requestId=" + requestId + " -> " + rr);
+			}
+			return rr.isHandled();
+		} catch (Throwable t) {
+			logger.severe("Bridge sync reconcile (HTTP) error", t);
+			return false;
+		}
 	}
 
 	// -------------------------------------------------------------

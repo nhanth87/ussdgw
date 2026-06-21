@@ -465,14 +465,40 @@ Integration: extend `tools/grpc-as-tester` with “slow AS, sync response after 
 
 ## 12. Implementation phases
 
-| Phase | Scope | Files |
-|-------|-------|-------|
-| **2a** | **`compareAndTransition` CAS (§6.2)** + `ABORTED` state + `markAborted` (§13.2) + `BridgeReconciler` + HttpClientSbb + HttpServerSbb refactor + docs | session-bridge (stores, FsmState), ChildSbb, HttpClientSbb, HttpServerSbb, SessionBridgeSupport |
-| **2b** | GrpcClientSbb + extend GrpcResponse requestId + poll window | grpc-as library, GrpcClientSbb |
-| **2c** | SipClientSbb + SipServerSbb headers + reconcile + abort mapping | SipClientSbb, SipServerSbb |
-| **2d** | HTTP 202 deferral (optional) + `inputGeneration` ordering (§13.3) | HttpClientSbb, VirtualSession, UssdPropertiesManagement |
-| **2e** | Backpressure (rate limit + circuit breaker, §13.5) + adaptive outlier guard (§13.8) | PushRetryQueue, AdaptiveTimeout |
-| **3** | Clustered / persistent store (§13.7) | new `VirtualSessionStore` impl (HotRod / Redis) |
+| Phase | Scope | Files | Status |
+|-------|-------|-------|--------|
+| **2a** | **`compareAndTransition` CAS (§6.2)** + `ABORTED` state + `markAborted` (§13.2) + `BridgeReconciler` + HttpClientSbb sync reconcile + HttpServerSbb refactor | session-bridge (stores, FsmState, reconciler), ChildSbb, HttpClientSbb, HttpServerSbb, SessionBridgeSupport | ✅ done |
+| **2b** | GrpcClientSbb sync reconcile + `requestId` in GrpcRequest/Response/envelope + RA echo | grpc-as library, grpc-as RA, GrpcClientSbb | ✅ done |
+| **2c** | SipClientSbb + SipServerSbb headers + reconcile + abort mapping | SipClientSbb, SipServerSbb | ⛔ not started |
+| **2d** | HTTP 202 deferral (optional) + `inputGeneration` ordering (§13.3) | HttpClientSbb, VirtualSession, UssdPropertiesManagement | 🟡 ordering field + reconciler check done; HTTP 202 deferral + per-input increment wiring pending |
+| **2e** | Backpressure (rate limit + circuit breaker, §13.5) + adaptive outlier guard (§13.8) | PushRetryQueue, AdaptiveTimeout | ⛔ not started |
+| **3** | Clustered / persistent store (§13.7) | new `VirtualSessionStore` impl (HotRod / Redis) | ⛔ not started |
+
+### Implementation status (2026-06-21)
+
+Delivered and unit-tested (34 tests green in `core/session-bridge`):
+
+- `FsmState.ABORTED` + transitions; `VirtualSession.inputGeneration` + copy constructor.
+- `VirtualSessionStore.compareAndTransition` atomic CAS in both stores (in-memory `compute`,
+  Infinispan copy-on-write `replace` loop) — concurrent test proves exactly-one winner.
+- `BridgeReconciler` (channel-agnostic) with full outcome set: DELIVERED / DUPLICATE / UNKNOWN /
+  EXPIRED / ABORTED / STALE / QUEUED; concurrent sync+push race test proves single delivery.
+- `BridgeMetrics` per-channel late counters; `ReconcileChannel`, `ReconcileResult`,
+  `NiPushDispatcher`.
+- `SessionBridgeSupport.reconcileLateResponse` / `markAborted` / `setNiPushDispatcher` /
+  input-generation helpers; `onAsyncCallback` now delegates to the reconciler.
+- SBB wiring: `HttpServerSbb.onPost` (Channel B), `HttpClientSbb` + `GrpcClientSbb` sync reconcile
+  (Channel A) on dead MO dialogue; `ChildSbb` network-abort hooks (`onDialogUserAbort`,
+  `onDialogProviderAbort`).
+- gRPC `requestId` end-to-end (request envelope, RA echo on response, `GrpcResponse.getRequestId`).
+- Test tools: gRPC AS echoes `requestId` and gained `--bridge-delay` / `--bridge-every` to overrun
+  the gate; load client sends `requestId`.
+
+**Remaining integration point (not blocking unit correctness):** the actual NI-push initiation for a
+Channel-A reconcile is delegated to a `NiPushDispatcher` that the SLEE layer must register via
+`SessionBridgeSupport.setNiPushDispatcher(...)`. Until one is wired, a reconciled sync response is
+enqueued on the existing `PushRetryQueue` (which itself needs a `PushExecutor` to perform the MAP
+NI push — see Phase 2a follow-up). Channel B (HttpServerSbb) already performs the push in-SBB.
 
 Estimated LOC: ~500 production + ~350 tests (Phase 2a–2c). **CAS + abort mapping are non-negotiable
 for production** (billing safety); ordering, backpressure, clustering can ship incrementally.

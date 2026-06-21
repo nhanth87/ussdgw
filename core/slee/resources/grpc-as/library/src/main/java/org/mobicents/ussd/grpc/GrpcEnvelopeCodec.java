@@ -42,6 +42,7 @@ public final class GrpcEnvelopeCodec {
 
     public static final String F_SESSION_ID = "sessionId";
     public static final String F_CORRELATION_ID = "correlationId";
+    public static final String F_REQUEST_ID = "requestId";
     public static final String F_PUSH = "push";
     public static final String F_NETWORK_ID = "networkId";
     public static final String F_PAYLOAD = "payloadB64";
@@ -56,6 +57,7 @@ public final class GrpcEnvelopeCodec {
         sb.append('{');
         appendString(sb, F_SESSION_ID, request.getSessionId()).append(',');
         appendString(sb, F_CORRELATION_ID, request.getCorrelationId()).append(',');
+        appendString(sb, F_REQUEST_ID, request.getRequestId()).append(',');
         appendRaw(sb, F_PUSH, Boolean.toString(request.isPush())).append(',');
         appendRaw(sb, F_NETWORK_ID, Integer.toString(request.getNetworkId())).append(',');
         appendString(sb, F_PAYLOAD, encodePayload(request.getPayload()));
@@ -65,10 +67,16 @@ public final class GrpcEnvelopeCodec {
 
     public static byte[] encodeResponse(boolean success, String correlationId, byte[] payload,
             String error) {
+        return encodeResponse(success, correlationId, null, payload, error);
+    }
+
+    public static byte[] encodeResponse(boolean success, String correlationId, String requestId,
+            byte[] payload, String error) {
         StringBuilder sb = new StringBuilder(256);
         sb.append('{');
         appendRaw(sb, F_SUCCESS, Boolean.toString(success)).append(',');
         appendString(sb, F_CORRELATION_ID, correlationId).append(',');
+        appendString(sb, F_REQUEST_ID, requestId).append(',');
         appendString(sb, F_PAYLOAD, encodePayload(payload)).append(',');
         appendString(sb, F_ERROR, error);
         sb.append('}');

@@ -144,6 +144,40 @@ public final class InfinispanVirtualSessionStore implements VirtualSessionStore 
     }
 
     @Override
+    public VirtualSession compareAndTransition(String correlationId, FsmState expected, FsmState next) {
+        if (correlationId == null || expected == null || next == null) {
+            return null;
+        }
+        final String key = KEY_SESSION + correlationId;
+        // Copy-on-write CAS loop using the atomic ConcurrentMap.replace(key, old, new) contract.
+        // VirtualSession uses identity equals, so the stored reference we just read is the exact
+        // value replace() compares against; a concurrent writer swaps the reference and we retry.
+        for (int spins = 0; spins < 64; spins++) {
+            Object current = cache.get(key);
+            if (!(current instanceof VirtualSession)) {
+                return null;
+            }
+            VirtualSession old = (VirtualSession) current;
+            if (old.isExpired(System.currentTimeMillis())) {
+                cache.remove(key);
+                return null;
+            }
+            if (old.getFsmState() != expected) {
+                return null;
+            }
+            VirtualSession updated = new VirtualSession(old);
+            if (!updated.transitionTo(next)) {
+                return null;
+            }
+            if (cache.replace(key, old, updated)) {
+                return updated;
+            }
+            // lost the race; another writer changed the entry — re-read and re-evaluate
+        }
+        return null;
+    }
+
+    @Override
     public boolean tryLock(String msisdn, String correlationId, long ttlMillis) {
         if (msisdn == null) {
             return true;

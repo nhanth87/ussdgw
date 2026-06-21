@@ -21,13 +21,17 @@ package org.mobicents.ussdgateway.slee;
 
 import org.mobicents.ussdgateway.UssdPropertiesManagement;
 import org.mobicents.ussdgateway.bridge.BridgeMetrics;
+import org.mobicents.ussdgateway.bridge.BridgeReconciler;
 import org.mobicents.ussdgateway.bridge.CorrelationIdGenerator;
 import org.mobicents.ussdgateway.bridge.FsmState;
 import org.mobicents.ussdgateway.bridge.LoggingNotificationFallback;
+import org.mobicents.ussdgateway.bridge.NiPushDispatcher;
 import org.mobicents.ussdgateway.bridge.NotificationFallback;
 import org.mobicents.ussdgateway.bridge.PushExecutor;
 import org.mobicents.ussdgateway.bridge.PushRetryQueue;
 import org.mobicents.ussdgateway.bridge.PushRetryTask;
+import org.mobicents.ussdgateway.bridge.ReconcileChannel;
+import org.mobicents.ussdgateway.bridge.ReconcileResult;
 import org.mobicents.ussdgateway.bridge.SessionPriority;
 import org.mobicents.ussdgateway.bridge.SessionPriorityResolver;
 import org.mobicents.ussdgateway.bridge.VirtualSession;
@@ -56,9 +60,11 @@ public final class SessionBridgeSupport {
     private final VirtualSessionStore store = VirtualSessionStoreFactory.getStore();
     private final BridgeMetrics metrics = BridgeMetrics.getInstance();
     private final NotificationFallback fallback = new LoggingNotificationFallback();
+    private final BridgeReconciler reconciler = new BridgeReconciler(store, metrics);
 
     private volatile PushRetryQueue pushQueue;
     private volatile PushExecutor pushExecutor;
+    private volatile NiPushDispatcher niPushDispatcher;
 
     private SessionBridgeSupport() {
     }
@@ -180,30 +186,103 @@ public final class SessionBridgeSupport {
     }
 
     /**
-     * Resolve and idempotently accept an async AS callback.
+     * Resolve and idempotently accept a late AS response that arrived on the dedicated push
+     * interface (Channel B). Backward-compatible shim over {@link #reconcileLateResponse}; prefer
+     * the latter so the per-channel metrics and outcome classification are captured.
      *
-     * @return the {@link VirtualSession} to push, or {@code null} if unknown, expired or a
+     * @return the {@link VirtualSession} to push, or {@code null} if unknown, expired, aborted or a
      *         duplicate callback.
      */
     public VirtualSession onAsyncCallback(String requestId) {
-        if (requestId == null) {
-            return null;
+        ReconcileResult r = reconcileLateResponse(requestId, null, ReconcileChannel.PUSH_HTTP,
+                BridgeReconciler.NO_GENERATION);
+        return r.shouldPush() ? r.getSession() : null;
+    }
+
+    /**
+     * Unified late-response reconciliation entry point (RFC §5). Atomic, exactly-once across the
+     * synchronous (Channel A) and push (Channel B) channels.
+     *
+     * @param requestId       echoed {@code X-Ussd-Request-Id}.
+     * @param payload         serialized {@code XmlMAPDialog} menu bytes (nullable; cached for retry).
+     * @param channel         which entry point received the response.
+     * @param inputGeneration request generation, or {@link BridgeReconciler#NO_GENERATION}.
+     */
+    public ReconcileResult reconcileLateResponse(String requestId, byte[] payload,
+            ReconcileChannel channel, int inputGeneration) {
+        if (!isEnabled()) {
+            return ReconcileResult.of(ReconcileResult.Outcome.DISABLED);
         }
-        VirtualSession s = store.getByRequestId(requestId);
+        ReconcileResult result = reconciler.reconcileLateResponse(requestId, payload, channel,
+                inputGeneration);
+        if (result.getOutcome() == ReconcileResult.Outcome.QUEUED) {
+            // Deferred behind a higher-priority MO session: schedule a back-off retry.
+            VirtualSession s = result.getSession();
+            if (s != null) {
+                enqueuePushRetry(s.getCorrelationId(), s.getMsisdn(),
+                        s.getLastMenu() != null ? s.getLastMenu() : s.getServiceCode());
+            }
+        } else if (result.shouldPush() && channel != null && channel.isSync()) {
+            // Channel A (sync): the original MO dialogue is already gone, so the client SBB cannot
+            // push on it. Hand the reconciled menu to the NI push dispatcher; if none is wired yet,
+            // fall back to the retry queue so delivery is not lost.
+            dispatchSyncNiPush(result.getSession(), payload);
+        }
+        return result;
+    }
+
+    private void dispatchSyncNiPush(VirtualSession session, byte[] payload) {
+        if (session == null) {
+            return;
+        }
+        NiPushDispatcher d = niPushDispatcher;
+        boolean delivered = false;
+        if (d != null) {
+            try {
+                delivered = d.deliverNiPush(session, payload);
+            } catch (Throwable t) {
+                delivered = false;
+            }
+        }
+        if (!delivered) {
+            enqueuePushRetry(session.getCorrelationId(), session.getMsisdn(),
+                    session.getLastMenu() != null ? session.getLastMenu() : session.getServiceCode());
+        }
+    }
+
+    /**
+     * Mark a session aborted because the <em>network</em> tore down the MO dialogue (MAP/TCAP/
+     * Provider/User abort). A subsequent late AS response is then dropped, never pushed (RFC §13.2).
+     */
+    public void markAborted(String correlationId) {
+        if (correlationId != null) {
+            reconciler.markAborted(correlationId);
+        }
+    }
+
+    /** Register the SLEE-supplied NI push dispatcher used to deliver reconciled sync-channel responses. */
+    public void setNiPushDispatcher(NiPushDispatcher dispatcher) {
+        this.niPushDispatcher = dispatcher;
+    }
+
+    public NiPushDispatcher niPushDispatcher() {
+        return niPushDispatcher;
+    }
+
+    /** Bump the input generation for ordering (RFC §13.3) when a new user input is received. */
+    public int nextInputGeneration(String correlationId) {
+        VirtualSession s = store.getByCorrelationId(correlationId);
         if (s == null) {
-            metrics.incLateCallbacks();
-            return null;
+            return 0;
         }
-        if (s.getFsmState() == FsmState.PUSH_PENDING || s.getFsmState().isTerminal()) {
-            metrics.incDuplicateCallbacks();
-            return null;
-        }
-        if (s.transitionTo(FsmState.PUSH_PENDING)) {
-            store.save(s);
-            metrics.incLateCallbacks();
-            return s;
-        }
-        return null;
+        int gen = s.incrementInputGeneration();
+        store.save(s);
+        return gen;
+    }
+
+    public int currentInputGeneration(String correlationId) {
+        VirtualSession s = store.getByCorrelationId(correlationId);
+        return s != null ? s.getInputGeneration() : BridgeReconciler.NO_GENERATION;
     }
 
     /**

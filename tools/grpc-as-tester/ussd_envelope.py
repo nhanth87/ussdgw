@@ -7,12 +7,15 @@ body whose content is a compact JSON envelope. This module mirrors the Java
 generation.
 
 Request envelope:
-    {"sessionId": "...", "correlationId": "...", "push": false, "networkId": 0, "payloadB64": "..."}
+    {"sessionId": "...", "correlationId": "...", "requestId": "...", "push": false,
+     "networkId": 0, "payloadB64": "..."}
 
 Response envelope:
-    {"success": true, "correlationId": "...", "payloadB64": "...", "error": null}
+    {"success": true, "correlationId": "...", "requestId": "...", "payloadB64": "...", "error": null}
 
 ``payloadB64`` is the Base64 of the serialized ``XmlMAPDialog`` exchanged with the gateway.
+``requestId`` is the per-request id the gateway generates; the AS MUST echo it on its response so
+the Virtual Session Bridge can reconcile a late (post-gate) response exactly-once (RFC §4/§13).
 """
 
 import base64
@@ -28,11 +31,12 @@ def decode_request(raw: bytes) -> dict:
 
 
 def encode_response(correlation_id: str, payload: bytes, success: bool = True,
-                    error: str = None) -> bytes:
-    """Encode a response envelope to bytes."""
+                    error: str = None, request_id: str = None) -> bytes:
+    """Encode a response envelope to bytes (echoing ``request_id`` for bridge reconciliation)."""
     out = {
         "success": success,
         "correlationId": correlation_id,
+        "requestId": request_id,
         "payloadB64": base64.b64encode(payload).decode("ascii") if payload else "",
         "error": error,
     }
@@ -40,11 +44,12 @@ def encode_response(correlation_id: str, payload: bytes, success: bool = True,
 
 
 def encode_request(session_id: str, correlation_id: str, payload: bytes,
-                   push: bool = False, network_id: int = 0) -> bytes:
+                   push: bool = False, network_id: int = 0, request_id: str = None) -> bytes:
     """Encode a request envelope (used by the load-test client)."""
     out = {
         "sessionId": session_id,
         "correlationId": correlation_id,
+        "requestId": request_id,
         "push": push,
         "networkId": network_id,
         "payloadB64": base64.b64encode(payload).decode("ascii") if payload else "",

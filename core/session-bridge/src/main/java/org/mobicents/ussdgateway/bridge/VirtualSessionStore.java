@@ -39,6 +39,17 @@ public interface VirtualSessionStore {
     void remove(String correlationId);
 
     /**
+     * Atomically transition the session identified by {@code correlationId} from {@code expected}
+     * to {@code next} and persist it. This is the single idempotency point that makes
+     * late-response delivery exactly-once across the sync and push channels (RFC §6.2): only one
+     * concurrent caller can win the {@code BRIDGED -> PUSH_PENDING} step.
+     *
+     * @return the updated session if the compare-and-swap succeeded; {@code null} if the session is
+     *         absent, expired, or its current state was not {@code expected} (lost the race).
+     */
+    VirtualSession compareAndTransition(String correlationId, FsmState expected, FsmState next);
+
+    /**
      * Idempotency mutex per MSISDN. Returns {@code true} if the lock was acquired for the given
      * correlation id, {@code false} if another in-flight request already holds it.
      */

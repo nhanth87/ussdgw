@@ -88,7 +88,10 @@ public abstract class GrpcClientSbb extends ChildSbb {
         String target = call.getRuleUrl();
         int networkId = xmlMAPDialog.getNetworkId();
 
-        GrpcRequest request = new GrpcRequest(target, correlationId, correlationId, false, networkId, payload);
+        // Propagate the bridge request id so the AS can echo it on a late response (Channel A).
+        String requestId = SessionBridgeSupport.getInstance().requestIdFor(correlationId);
+        GrpcRequest request = new GrpcRequest(target, correlationId, correlationId, requestId, false,
+                networkId, payload);
         if (grpcProvider != null) {
             grpcProvider.submit(request);
         } else {
@@ -152,6 +155,11 @@ public abstract class GrpcClientSbb extends ChildSbb {
     private void processGrpcResponse(GrpcResponse response) {
         MAPDialogSupplementary mapDialogSupplementary = this.getMAPDialog();
         if (mapDialogSupplementary == null) {
+            // Virtual Session Bridge Channel A: MO dialogue gone (gate fired). Try to reconcile this
+            // late sync gRPC response into an NI push instead of dropping it.
+            if (response != null && response.isSuccess() && tryBridgeSyncReconcile(response)) {
+                return;
+            }
             logger.warning("gRPC response received but MAP dialog is gone; dropping. correlationId="
                     + response.getCorrelationId());
             return;
@@ -214,6 +222,45 @@ public abstract class GrpcClientSbb extends ChildSbb {
             this.terminateProtocolConnection();
             this.updateDialogFailureStat();
             this.createCDRRecord(RecordStatus.FAILED_CORRUPTED_MESSAGE);
+        }
+    }
+
+    /**
+     * Virtual Session Bridge Channel A for gRPC: reconcile a late sync response (MO dialogue gone)
+     * into an NI push. Returns {@code true} when the bridge consumed it.
+     */
+    private boolean tryBridgeSyncReconcile(GrpcResponse response) {
+        try {
+            SessionBridgeSupport bridge = SessionBridgeSupport.getInstance();
+            if (!bridge.isEnabled()) {
+                return false;
+            }
+            String correlationId = this.getGrpcCorrelationId();
+            if (correlationId == null) {
+                USSDCDRState state = getOrCreateLocalRaCdrState();
+                correlationId = state != null ? state.getCorrelationId() : null;
+            }
+            if (correlationId == null) {
+                return false;
+            }
+            String requestId = response.getRequestId();
+            if (requestId == null) {
+                requestId = bridge.requestIdFor(correlationId);
+            }
+            if (requestId == null) {
+                return false;
+            }
+            int gen = bridge.currentInputGeneration(correlationId);
+            org.mobicents.ussdgateway.bridge.ReconcileResult rr = bridge.reconcileLateResponse(
+                    requestId, response.getPayload(),
+                    org.mobicents.ussdgateway.bridge.ReconcileChannel.SYNC_GRPC, gen);
+            if (logger.isFineEnabled()) {
+                logger.fine("Bridge sync reconcile (gRPC) requestId=" + requestId + " -> " + rr);
+            }
+            return rr.isHandled();
+        } catch (Throwable t) {
+            logger.severe("Bridge sync reconcile (gRPC) error", t);
+            return false;
         }
     }
 
