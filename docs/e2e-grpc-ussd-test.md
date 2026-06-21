@@ -123,7 +123,7 @@ docker compose up -d
 docker compose ps
 ```
 
-**Phải thấy** container `ussdgw-test` trạng thái `running` (hoặc `healthy` sau ~2 phút).
+**Phải thấy** container `ussd-ng` trạng thái `running` (hoặc `healthy` sau ~3–5 phút).
 
 ### Kiểm tra gateway đã sống
 
@@ -132,10 +132,15 @@ docker compose ps
 curl -fs http://localhost:9990/health && echo " OK"
 
 # Log (Ctrl+C để thoát)
-docker logs -f ussdgw-test
+docker logs -f ussd-ng
 ```
 
-Log khởi động WildFly mất **1–3 phút**. Đợi đến khi health OK rồi mới test MAP.
+Log khởi động WildFly mất **3–5 phút** lần đầu (deploy SLEE + patch JAR). Đợi đến khi health OK rồi mới test MAP.
+
+```bash
+./scripts/08-check-gateway.sh    # chẩn đoán nhanh
+curl -fs http://localhost:9990/health && echo " OK"
+```
 
 ### Dừng gateway
 
@@ -148,8 +153,8 @@ docker compose down
 
 | Service | Container | Vai trò |
 |---------|-----------|---------|
-| `init` | `ussdgw-test-init` | Chạy 1 lần: seed `/opt/ussdgw/data` |
-| `ussdgw` | `ussdgw-test` | USSD Gateway WildFly |
+| `init` | `ussd-ng-init` | Chạy 1 lần: seed `/opt/ussdgw/data` |
+| `ussdgw` | `ussd-ng` | USSD Gateway WildFly |
 
 - `network_mode: host` → SCTP listen **8012** trực tiếp trên máy host
 - Image: `restcomm-ussd:7.2.1-SNAPSHOT` (load ở Bước 3)
@@ -397,7 +402,7 @@ Chi tiết thiết kế: [`docs/design/bridge-unified-reconciliation-rfc.md`](de
 **Xem log:**
 
 ```bash
-docker logs ussdgw-test          # Gateway
+docker logs ussd-ng          # Gateway
 tail -f grpc-as.log              # gRPC AS
 ls tools/jss7-map-load/map-*.csv # Kết quả MAP
 ```

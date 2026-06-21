@@ -22,8 +22,10 @@ source "${SCRIPT_DIR}/compute-jvm.sh"
 # ── Phase 4: merge JVM layers + profile extras ───────────────────────
 BASE_JAVA_OPTS=""
 if [ -f "${JBOSS_HOME}/bin/standalone.conf" ]; then
+    set +u
     # shellcheck source=/dev/null
     source "${JBOSS_HOME}/bin/standalone.conf"
+    set -u
     BASE_JAVA_OPTS="${JAVA_OPTS:-}"
 fi
 

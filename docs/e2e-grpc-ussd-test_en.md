@@ -186,7 +186,12 @@ docker compose ps
 curl -fs http://localhost:9990/health && echo " OK"
 ```
 
-Wait **1–3 minutes** for WildFly. Logs: `docker logs -f ussdgw-test`
+Wait **3–5 minutes** for WildFly (first boot: SLEE deploy + JAR patch). Logs: `docker logs -f ussd-ng`
+
+```bash
+./scripts/08-check-gateway.sh
+curl -fs http://localhost:9990/health && echo " OK"
+```
 
 Stop:
 
@@ -400,7 +405,7 @@ Use `loadtest_client.py --multi-menu` with AS `--bridge-delay 8000` — tests AS
 **Log locations:**
 
 - MAP client: `client/maplog.txt` (Ant) or stdout / `tools/jss7-map-load/map-*.csv`
-- Gateway: `docker logs ussdgw-test` or `docker logs ussdgw-e2e`
+- Gateway: `docker logs ussd-ng` or `docker logs ussdgw-e2e`
 - gRPC AS: stdout or `ussdgw-test/grpc-as.log` (use `--verbose` for detail)
 
 ---
