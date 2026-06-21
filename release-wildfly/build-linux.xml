@@ -26,8 +26,8 @@
     <property name="jain-slee-jdbc.dir" value="${restcomm.ussd.dir}/../jain-slee.jdbc" />
     <property name="jain-slee-sip.dir" value="${restcomm.ussd.dir}/../jain-slee.sip" />
 
-    <property name="restcomm-jss7.version" value="9.2.11" />
-    <property name="restcomm-map-ra.version" value="9.2.11" />
+    <property name="restcomm-jss7.version" value="9.2.12" />
+    <property name="restcomm-map-ra.version" value="9.2.12" />
     <property name="restcomm-slee.http.version" value="7.0.0-SNAPSHOT" />
     <property name="restcomm-slee.jdbc.version" value="7.0.0-SNAPSHOT" />
     <property name="restcomm-slee.sip.version" value="7.0.0-SNAPSHOT" />
