@@ -65,8 +65,10 @@ sudo modprobe sctp    # if empty
 
 ```bash
 cd ussdgateway/release-wildfly
-./build-docker.sh
+./build-docker.sh   # Maven SLEE modules + ant release + docker build
 ```
+
+> `build-docker.sh` runs `mvn clean package` on `jain-slee/.../container/build/as7` first so the release zip does not contain Eclipse stub JARs (`Unresolved compilation problems` in SLEE). Ant target `verify-slee-jars` fails the build if stub bytecode is detected.
 
 **Build jSS7 MAP load client:**
 
@@ -320,7 +322,19 @@ cd ussdgateway/tools/grpc-as-tester
 
 ### Step 5 — (Optional) MAP Simulator GUI
 
-Use for step-by-step debugging instead of the load generator:
+Use for step-by-step debugging instead of the load generator.
+
+**From `ussdgw-test` package:**
+
+```bash
+cd ussdgw-test/tools/jss7-simulator/bin
+chmod +x run.sh
+./run.sh gui --name=main
+```
+
+Config: `tools/jss7-simulator/data/main_simulator2.xml`. Requires `lib/woodstox-core-*.jar` (verified by `./scripts/00-preflight.sh`).
+
+**From jSS7 source:**
 
 ```bash
 cd jSS7/tools/simulator/bootstrap/target/simulator-ss7/bin
@@ -339,9 +353,21 @@ Flow: **MAP client → Gateway SCTP → gRPC AS → multi-turn menu → End**.
 
 ### 5.1 Smoke test (one profile, few dialogs)
 
+**From `ussdgw-test` package** (classpath `lib/*`):
+
+```bash
+cd ussdgw-test/tools/jss7-map-load
+java -cp "lib/*" org.restcomm.protocols.ss7.map.load.ussd.Client \
+  10 5 sctp 127.0.0.1 8011 -1 127.0.0.1 8012 IPSP 101 102 1 2 3 2 8 6 8 \
+  1111112 9960639999 1 16 -100 0 "*100#" BALANCE 50 200
+```
+
+Or: `./scripts/06-run-map-smoke.sh`
+
+**From jSS7 source** (classpath `target/load/*`):
+
 ```bash
 cd jSS7/map/load
-
 java -cp "target/load/*" org.restcomm.protocols.ss7.map.load.ussd.Client \
   10 5 sctp 127.0.0.1 8011 -1 127.0.0.1 8012 IPSP 101 102 1 2 3 2 8 6 8 \
   1111112 9960639999 1 16 -100 0 "*100#" BALANCE 50 200
@@ -356,13 +382,6 @@ java -cp "target/load/*" org.restcomm.protocols.ss7.map.load.ussd.Client \
 | 26 | `BALANCE` | Menu profile |
 | 27–28 | `50` `200` | Think delay ms (adaptive gate) |
 
-Or via Ant (defaults in `ussd_build.xml`):
-
-```bash
-ant -f ussd_build.xml assemble
-ant -f ussd_build.xml client
-```
-
 From `ussdgw-test`:
 
 ```bash
@@ -371,7 +390,19 @@ From `ussdgw-test`:
 
 ### 5.2 Multi-menu load test
 
+**Package (`lib/*`):**
+
 ```bash
+cd ussdgw-test/tools/jss7-map-load
+java -cp "lib/*" org.restcomm.protocols.ss7.map.load.ussd.Client \
+  100000 400 sctp 127.0.0.1 8011 -1 127.0.0.1 8012 IPSP 101 102 1 2 3 2 8 6 8 \
+  1111112 9960639999 1 16 -100 5 "*100#" RANDOM 50 300
+```
+
+**jSS7 source (`target/load/*`):**
+
+```bash
+cd jSS7/map/load
 java -cp "target/load/*" org.restcomm.protocols.ss7.map.load.ussd.Client \
   100000 400 sctp 127.0.0.1 8011 -1 127.0.0.1 8012 IPSP 101 102 1 2 3 2 8 6 8 \
   1111112 9960639999 1 16 -100 5 "*100#" RANDOM 50 300
@@ -565,6 +596,10 @@ Use `loadtest_client.py --multi-menu` with AS `--bridge-delay 8000` — tests AS
 | SCTP / MAP fails | Module not loaded | `sudo modprobe sctp` then `lsmod \| grep sctp` |
 | Long outage during upgrade | Stopped service before load finished | Use default `01` (load while up) then `03-switch` |
 | `docker load` fails | Corrupt/missing tar | Re-copy `docker/*.tar`; ensure old image removed first |
+| `Could not find main class` MAP Client | Wrong classpath in package | Use `java -cp "lib/*"` from `ussdgw-test/tools/jss7-map-load`, not `target/load/*` |
+| Simulator `WstxOutputFactory` NCE | Missing Woodstox in `lib/` | Re-run `build-package.sh`; check `00-preflight.sh` |
+| SLEE `Unresolved compilation` | Bad extension JAR in old image | Rebuild with `./build-docker.sh` (Maven SLEE + verify-slee-jars) |
+| `UnknownHostException: ussd-ng` | Hostname not in `/etc/hosts` with host network | Use image with entrypoint fix; `USSDGW_HOSTNAME=ussd-ng` in compose |
 
 **Log locations:**
 
@@ -588,4 +623,4 @@ Use `loadtest_client.py --multi-menu` with AS `--bridge-delay 8000` — tests AS
 
 ---
 
-*Last updated: 2026-06-21 — HTTP loadtest (pull/push), gRPC/MAP multi-menu.*
+*Last updated: 2026-06-21 — Docker SLEE/hostname fixes, MAP lib/* classpath, simulator Woodstox.*

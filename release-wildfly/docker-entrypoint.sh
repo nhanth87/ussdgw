@@ -7,6 +7,26 @@ USSDGW_HOST_BASE="${USSDGW_HOST_BASE:-/opt/ussdgw}"
 
 export JBOSS_HOME USSDGW_HOST_BASE
 
+# ── Phase 0: ensure container hostname resolves (required for network_mode:host) ──
+# Docker sets the kernel hostname (e.g. ussd-ng) but does not add it to /etc/hosts.
+# WildFly/SLEE call InetAddress.getLocalHost() during startup → UnknownHostException without this.
+ensure_local_hostname() {
+    local name="${USSDGW_HOSTNAME:-$(hostname -s 2>/dev/null || hostname)}"
+    [ -n "$name" ] || return 0
+    [ "$name" = "localhost" ] && return 0
+    if grep -qE "[[:space:]]${name}([[:space:]]|$)" /etc/hosts 2>/dev/null; then
+        echo "[init] hostname ${name} already in /etc/hosts"
+        return 0
+    fi
+    echo "[init] Adding 127.0.1.1 ${name} to /etc/hosts (host-network hostname resolution)"
+    # Ensure newline before append (some base images ship /etc/hosts without trailing LF)
+    if [ -s /etc/hosts ] && [ "$(tail -c1 /etc/hosts | wc -l)" -eq 0 ]; then
+        echo "" >> /etc/hosts
+    fi
+    echo "127.0.1.1 ${name}" >> /etc/hosts
+}
+ensure_local_hostname
+
 # ── Phase 1: init directories, seed config, wire symlinks ──────────
 # shellcheck source=/dev/null
 source "${SCRIPT_DIR}/init-host-dirs.sh"
