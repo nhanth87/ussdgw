@@ -80,3 +80,10 @@ release-wildfly/*
 
 # Understand knowledge graph
 .understand-anything/
+
+# Internal notes / research drafts — not for GitHub
+discussion_*.md
+analysis_report.md
+feature-merge-state.md
+dockerDesignForUssd.md
+docs/research_plan_*.md
