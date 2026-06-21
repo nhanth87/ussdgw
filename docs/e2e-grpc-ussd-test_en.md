@@ -49,8 +49,17 @@ flowchart LR
 | Maven | 3.9.x |
 | Docker | Gateway image `restcomm-ussd:7.2.1-SNAPSHOT` |
 | Python | 3.9+ with `grpcio` |
-| SCTP (Linux) | Kernel SCTP for MAP client ↔ gateway |
+| SCTP (Linux) | Kernel SCTP — verify: `lsmod \| grep sctp` |
 | jSS7 | Build simulator + map/load (`9.2.12`) |
+
+**SCTP kernel module** (required for SS7/MAP):
+
+```bash
+lsmod | grep sctp
+# OK: sctp  557056  20  (refs > 0)
+sudo modprobe sctp    # if empty
+./scripts/00-preflight.sh
+```
 
 **Build gateway Docker image** (if not already available):
 
@@ -159,14 +168,84 @@ File: `tools/grpc-as-tester/menu_config.json` (same content in `jSS7/map/load/sr
 
 ## 4. Start the lab
 
-### Step 1 — Load Docker image
+### Step 1 — Load Docker image (no downtime)
 
 ```bash
 cd /opt/ussdgw-test
 ./scripts/01-load-docker-image.sh
 ```
 
-Stops the gateway stack, removes old `restcomm-ussd:*` images, then loads from the package `.tar`.
+**Default:** `docker load` while gateway **keeps running**. If `/opt/ussdgw` exists, creates a host backup under `backups/ussdgw-<timestamp>/ussdgw-host.tgz` before loading.
+
+Writes `gateway/.env` with unique release tag from `docker/package.manifest` (e.g. `restcomm-ussd:7.2.1-SNAPSHOT-20260621T154000-abc1234`).
+
+**Old Docker images are kept** on the host for rollback — nothing is deleted unless you run `--prune` explicitly.
+
+Verify:
+
+```bash
+docker images restcomm-ussd
+./scripts/01-load-docker-image.sh --list-images
+cat gateway/.env
+ls -la backups/
+```
+
+| Flag | When to use |
+|------|-------------|
+| *(default)* | Prep upgrade — backup host + load tar, zero downtime |
+| `--switch` | Backup + load + recreate gateway |
+| `--fresh-install` | Lab reset only — removes **all** old images |
+| `--prune --keep N` | Optional disk cleanup (default keep=5 + running + previous) |
+| `--no-backup` | Skip `/opt/ussdgw` tar backup |
+| `--force` | Reload tar even if release already loaded |
+| `--list-images` | Show installed tags + switch history |
+
+### Step 1b — Switch gateway to new release (brief downtime)
+
+```bash
+./scripts/03-switch-gateway.sh
+```
+
+Backs up `/opt/ussdgw` again, saves previous image to `gateway/.env.previous`, then `compose recreate`.
+
+Downtime ≈ WildFly boot (3–5 min). Image already on disk from Step 1.
+
+### Step 1c — Rollback if new release fails
+
+**Rollback Docker image** (previous release still on disk):
+
+```bash
+./scripts/03-switch-gateway.sh --rollback
+# or pick a specific kept tag:
+./scripts/03-switch-gateway.sh --to restcomm-ussd:7.2.1-SNAPSHOT-20260621T120000-abc1234
+./scripts/03-switch-gateway.sh --list-images
+```
+
+**Rollback host config** (`/opt/ussdgw/data`, logs, standalone.conf):
+
+```bash
+./scripts/02-setup-host.sh --list-backups
+sudo ./scripts/02-setup-host.sh --restore backups/ussdgw-20260621T154000Z/
+./scripts/03-switch-gateway.sh --rollback
+```
+
+**Production upgrade workflow:**
+
+```bash
+# 1) Prep — service stays up (docker load may take minutes)
+./scripts/01-load-docker-image.sh
+
+# 2) Short maintenance window
+./scripts/03-switch-gateway.sh
+./scripts/08-check-gateway.sh
+
+# 3) If problems — rollback without re-loading tar
+./scripts/03-switch-gateway.sh --rollback
+# and/or restore host:
+sudo ./scripts/02-setup-host.sh --restore backups/ussdgw-<timestamp>/
+```
+
+Each package build has unique `BUILD_ID` in `docker/package.manifest` — old and new images coexist.
 
 ### Step 2 — Host setup (`/opt/ussdgw`)
 
@@ -174,7 +253,23 @@ Stops the gateway stack, removes old `restcomm-ussd:*` images, then loads from t
 sudo ./scripts/02-setup-host.sh
 ```
 
-Copies test config (GRPC rule `*100#` → `127.0.0.1:8443`, bridge enabled) into `/opt/ussdgw/data/`.
+Creates host dirs, applies package config-seed (`*100#` gRPC, `*519#` HTTP). If `/opt/ussdgw/data` already exists, **auto backup** before overwriting seed files.
+
+| Flag | Purpose |
+|------|---------|
+| `--list-backups` | List `backups/ussdgw-*` archives |
+| `--restore <dir>` | Restore `/opt/ussdgw` from backup (creates pre-restore safety backup) |
+| `--no-seed` | Init dirs only — do not overwrite XML in `data/` |
+
+**SCTP check** (required for MAP/SS7):
+
+```bash
+lsmod | grep sctp
+# expect: sctp  ... refs>0
+sudo modprobe sctp   # if missing
+```
+
+`02-setup-host.sh` and `00-preflight.sh` report SCTP status using `lsmod | awk '/^sctp /'`.
 
 ### Step 3 — Start USSD Gateway with `docker compose up` ⭐
 
@@ -464,6 +559,12 @@ Use `loadtest_client.py --multi-menu` with AS `--bridge-delay 8000` — tests AS
 | Menu stuck at one turn | Single-turn AS / wrong menu | Use `ussd_as_server.py` + `menu_config.json` |
 | High `FailedScenario` | Think delay + bridge delay too long | Reduce `--bridge-delay` or increase `dialogtimeout` |
 | HTTP pull connection refused | HTTP AS not on 8049 | `./scripts/09-start-http-as.sh`; scrule `*519#` → `http://127.0.0.1:8049/` |
+| Gateway unchanged after new tar | Container not recreated | `./scripts/03-switch-gateway.sh` after load |
+| New release unstable | Need previous build | `./scripts/03-switch-gateway.sh --rollback` |
+| Config broken after upgrade | Host data overwritten | `sudo ./scripts/02-setup-host.sh --restore backups/ussdgw-<ts>/` |
+| SCTP / MAP fails | Module not loaded | `sudo modprobe sctp` then `lsmod \| grep sctp` |
+| Long outage during upgrade | Stopped service before load finished | Use default `01` (load while up) then `03-switch` |
+| `docker load` fails | Corrupt/missing tar | Re-copy `docker/*.tar`; ensure old image removed first |
 
 **Log locations:**
 
