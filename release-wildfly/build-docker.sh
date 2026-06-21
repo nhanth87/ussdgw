@@ -4,10 +4,22 @@ set -euo pipefail
 VERSION="${USSD_VERSION:-7.2.1-SNAPSHOT}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 JAIN_SLEE_AS7_DIR="${SCRIPT_DIR}/../../jain-slee/jain-slee/container/build/as7"
+JAIN_SLEE_HTTP_DIR="${SCRIPT_DIR}/../../jain-slee-http-okhttp/resources/http-servlet"
+JAIN_SLEE_SS7_DIR="${SCRIPT_DIR}/../../jain-slee.ss7/resources/map"
 
 echo "=== Step 0: Rebuild SLEE AS7 modules (Maven) ==="
 cd "${JAIN_SLEE_AS7_DIR}"
 mvn -q clean package -Dmaven.test.skip=true
+
+echo ""
+echo "=== Step 0b: Rebuild HTTP Servlet RA (Maven) ==="
+cd "${JAIN_SLEE_HTTP_DIR}"
+mvn -q clean install -Dmaven.test.skip=true
+
+echo ""
+echo "=== Step 0c: Rebuild MAP RA (Maven) ==="
+cd "${JAIN_SLEE_SS7_DIR}"
+mvn -q clean install -Dmaven.test.skip=true
 
 echo ""
 echo "=== Step 1: Build Linux release package ==="
