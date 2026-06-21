@@ -9,11 +9,137 @@
 [![LoadTest](https://img.shields.io/badge/Load%20Test-10k%20TPS-brightgreen.svg)](#-10k-tps-load-test-suite)
 [![JCTools](https://img.shields.io/badge/Collections-JCTools%204.0.3-yellow.svg)](https://github.com/JCTools/JCTools)
 
-## What's New — gRPC AS & Adaptive Timeout
+## ✨ What's New
 
-**gRPC to your Application Server.** The gateway talks to the AS over **gRPC (HTTP/2)** as easily as HTTP — same pull/push USSD flows, same routing rules, one unified `sessionId`/`correlationId` from the first network hit through every AS callback. Your AS stays a gRPC server; the gateway is the client. Drop it into a microservices stack without HTTP/XML glue or extra sidecars.
+> **7.2.1** — gRPC Application Server integration · Adaptive gate timeout · Virtual Session Bridge  
+> Design RFC for unified late-response reconciliation: [`docs/design/bridge-unified-reconciliation-rfc.md`](docs/design/bridge-unified-reconciliation-rfc.md)
 
-**Adaptive timeout that learns your network.** Fixed timeouts are a productivity tax: too aggressive and you drop valid responses from a busy AS; too lenient and MAP dialogues pile up, capping TPS. Adaptive timeout tracks **observed AS latency per network (EWMA)** and widens or tightens the gate automatically — fast links stay snappy, slow operators get headroom without hand-tuning XML for every deployment. Paired with **Virtual Session Bridge**, a slow AS no longer kills the subscriber journey: the MO dialogue closes on time, the AS answers asynchronously, and NI push delivers the menu when ready. **More completed sessions, fewer false timeouts, less ops firefighting** — especially under mixed latency (banking peaks, cross-border SS7, overloaded cores).
+<table>
+<tr>
+<td width="50%" valign="top">
+
+### 📡 gRPC ↔ Application Server
+
+Connect the AS over **gRPC (HTTP/2)** with the same pull/push semantics as HTTP — no XML glue, no extra sidecar.
+
+| | |
+|---|---|
+| **Role** | Gateway = gRPC client · AS = gRPC server |
+| **Payload** | Same `XmlMAPDialog` as HTTP (JSON envelope on wire) |
+| **Session id** | One stable `sessionId` from first network hit through every AS round-trip |
+| **Routing** | `ScRoutingRuleType.GRPC` → `host:port` |
+
+</td>
+<td width="50%" valign="top">
+
+### ⏱️ Adaptive Timeout + Session Bridge
+
+Stop losing subscribers when the AS or the network is slow.
+
+| | |
+|---|---|
+| **Problem** | USSD MAP timer ~15–30s · banking/API lookups often longer |
+| **Adaptive gate** | EWMA of AS latency **per network** — gate auto-tightens or widens within your ceiling |
+| **Bridge** | Release MO dialogue (S1) on time → deliver menu via **NI Push (S2)** when AS is ready |
+| **Outcome** | Higher session success rate · fewer false timeouts · less per-operator XML tuning |
+
+</td>
+</tr>
+</table>
+
+---
+
+### Flow 1 — gRPC pull, AS responds before gate *(happy path)*
+
+Subscriber dials `*101#`. Gateway forwards to the AS over gRPC; the menu returns while the MO dialogue is still open.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant U as 📱 Subscriber
+  participant GW as USSD Gateway
+  participant AS as gRPC AS
+  participant SS7 as MSC / MAP
+
+  U->>SS7: *101# (MO)
+  SS7->>GW: ProcessUnstructuredSSRequest
+  GW->>AS: gRPC Process(sessionId, payload)
+  Note over GW,AS: within adaptive gate (~7s)
+  AS-->>GW: menu XmlMAPDialog
+  GW->>SS7: UnstructuredSSRequest
+  SS7->>U: Show menu (S1)
+```
+
+---
+
+### Flow 2 — Slow AS: adaptive gate + Virtual Session Bridge
+
+AS needs longer than the network allows. Gateway releases S1 with a friendly wait message, keeps state in Infinispan, and delivers the result on a new NI push dialogue (S2).
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant U as 📱 Subscriber
+  participant GW as USSD Gateway
+  participant Store as Infinispan
+  participant AS as Application Server
+  participant SS7 as MSC / MAP
+
+  U->>SS7: menu input
+  SS7->>GW: MO dialogue S1
+  GW->>Store: WAIT_AS + requestId
+  GW->>AS: HTTP / gRPC / SIP + X-Ussd-Request-Id
+  Note over GW: adaptive gate fires (~EWMA × headroom)
+  GW->>U: "Đang xử lý, sẽ cập nhật ngay"
+  GW->>SS7: close S1
+  GW->>Store: BRIDGED
+  Note over AS: processing 10–30s…
+  AS-->>GW: late response (sync or push URL)
+  GW->>SS7: NI Push S2
+  SS7->>U: menu result
+  Note over GW: CDR S1 + S2 share correlationId
+```
+
+---
+
+### Flow 3 — Unified late response *(RFC — review)*
+
+After gate, the AS may answer on the **same sync connection** (preferred) or on the **existing USSD Push URL** if the transport already closed — one contract, no separate `/async-response` endpoint.
+
+```mermaid
+flowchart LR
+  subgraph S1["MO dialogue S1"]
+    MO[User input]
+  end
+
+  subgraph Gate["Adaptive gate"]
+    G[Release S1 · BRIDGED]
+  end
+
+  subgraph Channels["Late response — pick one"]
+    A["Channel A<br/>Sync HTTP / gRPC / SIP"]
+    B["Channel B<br/>POST push servlet<br/>+ X-Ussd-Request-Id"]
+  end
+
+  subgraph S2["NI Push S2"]
+    P[Menu to subscriber]
+  end
+
+  MO --> G
+  G --> A
+  G --> B
+  A --> P
+  B --> P
+```
+
+| Scenario | What happens | AS action |
+|----------|--------------|-----------|
+| AS fast | Menu on S1, no bridge | Normal sync response |
+| AS slow, sync alive | Gate → reconcile on same HTTP/gRPC/SIP | Return menu on original request |
+| AS slow, sync dead | Gate → NI Push S2 | `POST` existing push URL + `X-Ussd-Request-Id` |
+| Duplicate delivery | Idempotent per `requestId` | Safe to retry |
+
+📄 Full bridge spec: [`docs/design/virtual-session-bridge.md`](docs/design/virtual-session-bridge.md) · RFC: [`bridge-unified-reconciliation-rfc.md`](docs/design/bridge-unified-reconciliation-rfc.md)
 
 ---
 
