@@ -81,7 +81,29 @@
         </delete>
     </target>
 
-    <target name="copy-ussd">
+    <target name="verify-slee-jars">
+        <echo>Verifying SLEE container JARs are Maven-compiled (no Eclipse stubs)</echo>
+        <property name="slee.extension.jar"
+                  value="${jain-slee.dir}/container/build/as7/extension/target/module/main/slee-container-build-as7-extension-8.jar"/>
+        <property name="slee.modules.dir"
+                  value="${jain-slee.dir}/container/build/as7/modules/target/module/main"/>
+        <available file="${slee.extension.jar}" property="slee.extension.jar.exists"/>
+        <fail unless="slee.extension.jar.exists"
+              message="SLEE extension jar missing: ${slee.extension.jar}. Run: mvn -f ${jain-slee.dir}/container/build/as7/pom.xml clean package -Dmaven.test.skip=true"/>
+        <available file="${slee.modules.dir}" type="dir" property="slee.modules.dir.exists"/>
+        <fail unless="slee.modules.dir.exists"
+              message="SLEE modules dir missing: ${slee.modules.dir}. Run: mvn -f ${jain-slee.dir}/container/build/as7/pom.xml clean package -Dmaven.test.skip=true"/>
+        <exec executable="bash" failonerror="true">
+            <arg value="-c"/>
+            <arg value="if strings '${slee.extension.jar}' | grep -q 'Unresolved compilation'; then echo 'BAD JAR (Eclipse stubs): ${slee.extension.jar}' &gt;&amp;2; exit 1; fi"/>
+        </exec>
+        <exec executable="bash" failonerror="true">
+            <arg value="-c"/>
+            <arg value="for j in '${slee.modules.dir}'/*.jar; do if strings &quot;$j&quot; | grep -q 'Unresolved compilation'; then echo &quot;BAD JAR (Eclipse stubs): $j&quot; &gt;&amp;2; exit 1; fi; done"/>
+        </exec>
+    </target>
+
+    <target name="copy-ussd" depends="verify-slee-jars">
         <mkdir dir="${release.dir}/extra" />
 
         <!-- deploy: jSS7 modules from local workspace -->

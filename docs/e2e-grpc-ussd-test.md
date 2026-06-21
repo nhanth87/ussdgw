@@ -334,6 +334,7 @@ sudo ./scripts/start-all.sh
 cd tools/jss7-simulator/bin
 chmod +x run.sh
 ./run.sh gui --name=main
+# Nếu lỗi WstxOutputFactory → chạy lại build-package.sh; kiểm tra 00-preflight.sh
 ```
 
 Trong cửa sổ GUI:
@@ -368,11 +369,14 @@ Chỉ dùng khi ông chủ đang develop, **không** có file `ussdgw-test`.
 ## B.1 — Build (một lần)
 
 ```bash
-# Gateway image
+# Gateway image (Maven SLEE + ant + docker — tránh JAR stub Eclipse)
 cd ussdgateway/release-wildfly && ./build-docker.sh
 
 # MAP load client
 cd jSS7/map/load && mvn clean package -Passemble -DskipTests
+
+# SS7 simulator (cần woodstox trong lib/)
+cd jSS7 && mvn install -pl tools/simulator -am -Dmaven.test.skip=true
 
 # Python AS
 cd ussdgateway/tools/grpc-as-tester
@@ -418,6 +422,19 @@ cd ussdgateway/tools/grpc-as-tester
 ```
 
 ## B.4 — Terminal 3: MAP smoke
+
+**Package (`ussdgw-test`):**
+
+```bash
+cd ussdgw-test/tools/jss7-map-load
+java -cp "lib/*" org.restcomm.protocols.ss7.map.load.ussd.Client \
+  10 5 sctp 127.0.0.1 8011 -1 127.0.0.1 8012 IPSP 101 102 1 2 3 2 8 6 8 \
+  1111112 9960639999 1 4 -100 0 "*100#" BALANCE 50 200
+```
+
+Hoặc: `./scripts/06-run-map-smoke.sh`
+
+**jSS7 source:**
 
 ```bash
 cd jSS7/map/load
@@ -469,6 +486,10 @@ Chi tiết thiết kế: [`docs/design/bridge-unified-reconciliation-rfc.md`](de
 | Bản mới lỗi | Cần quay lại | `./scripts/03-switch-gateway.sh --rollback` |
 | Config hỏng | data bị ghi đè | `02-setup-host.sh --restore backups/ussdgw-*/` |
 | SCTP / MAP fail | Module chưa load | `sudo modprobe sctp` + `lsmod \| grep sctp` |
+| `Could not find main class` Client | Sai classpath package | Dùng `java -cp "lib/*"` trong `tools/jss7-map-load` |
+| Simulator `WstxOutputFactory` | Thiếu woodstox trong lib | `./scripts/build-package.sh`; `00-preflight.sh` |
+| SLEE `Unresolved compilation` | Image cũ có JAR stub | `./build-docker.sh` (Maven SLEE trước ant) |
+| `UnknownHostException: ussd-ng` | Host network thiếu /etc/hosts | Image mới + `USSDGW_HOSTNAME=ussd-ng` |
 | Python pip lỗi | Không có mạng | Package có `wheels/` — script tự cài offline |
 
 **Xem log:**
