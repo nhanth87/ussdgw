@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<m3uaConfig>
+  <timeBetweenHeartbeat>10000</timeBetweenHeartbeat>
+  <statisticsEnabled>false</statisticsEnabled>
+  <statisticsTaskDelay>5000</statisticsTaskDelay>
+  <statisticsTaskPeriod>5000</statisticsTaskPeriod>
+  <routingKeyManagementEnabled>false</routingKeyManagementEnabled>
+  <useLsbForLinksetSelection>false</useLsbForLinksetSelection>
+  <aspFactoryList>
+    <aspFactory name="asp1" started="true" associationName="ass1">
+      <heartBeatEnabled>false</heartBeatEnabled>
+    </aspFactory>
+  </aspFactoryList>
+  <asList>
+    <as minAspActiveForLb="1">
+      <name>as1</name>
+      <functionality>IPSP</functionality>
+      <exchangeType>SE</exchangeType>
+      <ipspType>SERVER</ipspType>
+      <aspFactoryNames>
+        <aspFactoryName>asp1</aspFactoryName>
+      </aspFactoryNames>
+      <routingContext>
+        <rcs>
+          <rcs>101</rcs>
+        </rcs>
+      </routingContext>
+      <trafficModeType>
+        <mode>2</mode>
+      </trafficModeType>
+      <defaultTrafficModeType>
+        <mode>2</mode>
+      </defaultTrafficModeType>
+    </as>
+  </asList>
+  <route>
+    <routeEntry>
+      <key>1:2:3</key>
+      <value>
+        <trafficModeType>
+          <mode>2</mode>
+        </trafficModeType>
+        <asArraytemp>as1</asArraytemp>
+      </value>
+    </routeEntry>
+  </route>
+</m3uaConfig>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<HashMap>
+  <noroutingruleconfigerrmssg>Not valid short code. Please dial valid short code.</noroutingruleconfigerrmssg>
+  <serveroverloadedmsg>Server is overloaded. Please try later</serveroverloadedmsg>
+  <servererrmssg>Server error, please try again after sometime</servererrmssg>
+  <dialogtimeouterrmssg>Request timeout please try again after sometime.</dialogtimeouterrmssg>
+  <dialogtimeout>25000</dialogtimeout>
+  <ussdgt>923330053058</ussdgt>
+  <ussdssn>8</ussdssn>
+  <hlrssn>6</hlrssn>
+  <mscssn>8</mscssn>
+  <maxmapv>3</maxmapv>
+  <cdrloggingto>Textfile</cdrloggingto>
+  <cdrSeparator>:</cdrSeparator>
+  <maxactivitycount>5000</maxactivitycount>
+</HashMap>

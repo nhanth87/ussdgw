@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<scRoutingRuleList>
+  <ArrayList>
+    <item>
+      <ruleType>HTTP</ruleType>
+      <shortcode>*519#</shortcode>
+      <networkid>0</networkid>
+      <ruleurl>http://127.0.0.1:8080/ussddemo/test</ruleurl>
+      <exactmatch>true</exactmatch>
+    </item>
+    <item>
+      <ruleType>SIP</ruleType>
+      <shortcode>*518#</shortcode>
+      <networkid>0</networkid>
+      <sipProxy>127.0.0.1:5080</sipProxy>
+      <exactmatch>true</exactmatch>
+    </item>
+  </ArrayList>
+</scRoutingRuleList>

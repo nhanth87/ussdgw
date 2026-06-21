@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ResourcesConfig>
+  <remoteSpcs>
+    <remoteSignalingPointCode id="1" remoteSpc="1" remoteSpcFlag="0" mask="0" remoteSpcProhibited="false" remoteSccpProhibited="false" rl="0" rsl="0"/>
+  </remoteSpcs>
+  <remoteSsns>
+    <remoteSubSystem id="1" remoteSpc="1" remoteSsn="8" remoteSsnFlag="0" markProhibitedWhenSpcResuming="false" remoteSsnProhibited="false"/>
+  </remoteSsns>
+  <concernedSpcs>
+  </concernedSpcs>
+</ResourcesConfig>

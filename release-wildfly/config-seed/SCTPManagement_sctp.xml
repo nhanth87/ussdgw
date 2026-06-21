@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sctp>
+  <connectdelay>5000</connectdelay>
+  <congControl_DelayThreshold_1>2.5</congControl_DelayThreshold_1>
+  <congControl_DelayThreshold_2>8.0</congControl_DelayThreshold_2>
+  <congControl_DelayThreshold_3>14.0</congControl_DelayThreshold_3>
+  <congControl_BackToNormalDelayThreshold_1>1.5</congControl_BackToNormalDelayThreshold_1>
+  <congControl_BackToNormalDelayThreshold_2>5.5</congControl_BackToNormalDelayThreshold_2>
+  <congControl_BackToNormalDelayThreshold_3>10.0</congControl_BackToNormalDelayThreshold_3>
+  <servers>
+    <!-- Listen on all interfaces for Docker host network mode -->
+    <server name="serv1" hostAddress="0.0.0.0" hostport="8012" started="true" ipChannelType="SCTP" acceptAnonymousConnections="false" maxConcurrentConnectionsCount="0"/>
+  </servers>
+  <associations>
+    <association name="ass1" hostAddress="0.0.0.0" hostPort="8012" peerAddress="127.0.0.1" peerPort="8011" serverName="serv1" ipChannelType="SCTP" type="SERVER" started="true"/>
+  </associations>
+</sctp>

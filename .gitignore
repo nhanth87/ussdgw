@@ -58,11 +58,25 @@ __pycache__/
 # Release folders - only keep build.xml
 release/**
 !release/build.xml
-release-wildfly/**
+release-wildfly/*
 !release-wildfly/build.xml
 !release-wildfly/extensions-build.xml
 !release-wildfly/standalone-patched.xml
 !release-wildfly/slee-container-module-patched.xml
+!release-wildfly/Dockerfile
+!release-wildfly/docker-entrypoint.sh
+!release-wildfly/docker-compose.yml
+!release-wildfly/docker-compose.dev.yml
+!release-wildfly/build-docker.sh
+!release-wildfly/build-linux.xml
+!release-wildfly/setup-server.sh
+!release-wildfly/standalone.conf
+!release-wildfly/scripts/
+!release-wildfly/scripts/**
+!release-wildfly/config-seed/
+!release-wildfly/config-seed/**
+!release-wildfly/docker-config/
+!release-wildfly/docker-config/**
 
 # Understand knowledge graph
 .understand-anything/

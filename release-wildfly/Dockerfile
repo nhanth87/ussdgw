@@ -1,36 +1,47 @@
-FROM eclipse-temurin:8-jdk
+FROM eclipse-temurin:8-jdk-jammy
 
-# Install unzip + gosu (for user switching)
-RUN apt-get update && apt-get install -y unzip gosu lksctp-tools && rm -rf /var/lib/apt/lists/*
+ARG USSD_VERSION=7.2.1-SNAPSHOT
+ENV USSD_VERSION=${USSD_VERSION}
+ENV JBOSS_HOME=/opt/restcomm/restcomm-ussd-${USSD_VERSION}/wildfly-10.0.0.Final
+ENV USSDGW_HOST_BASE=/opt/ussdgw
+ENV AUTO_JVM_ENABLED=true
+ENV USSDGW_PROFILE=lab
+ENV USER_CONFIG_JVM=""
+ENV PATCH_FORCE=true
+ENV PATCH_BACKUP=true
 
-# Create ussdgw user with FIXED UID/GID = 2000 (must match host /home/meodien/ussdgateway owner)
-RUN groupadd -r -g 2000 ussdgw && useradd -r -u 2000 -g ussdgw -d /opt/restcomm ussdgw
+RUN apt-get update && apt-get install -y \
+    unzip \
+    gosu \
+    lksctp-tools \
+    curl \
+    procps \
+    iproute2 \
+    inetutils-ping \
+    && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
+RUN groupadd -r -g 2000 ussdgw \
+ && useradd -r -u 2000 -g 2000 -d /opt/restcomm -s /sbin/nologin ussdgw
+
 WORKDIR /opt/restcomm
 
-# Copy and extract release
-COPY restcomm-ussd-7.2.1-SNAPSHOT-linux.zip /tmp/
-RUN unzip -q /tmp/restcomm-ussd-7.2.1-SNAPSHOT-linux.zip -d /opt/restcomm && \
-    rm /tmp/restcomm-ussd-7.2.1-SNAPSHOT-linux.zip && \
-    chmod +x /opt/restcomm/restcomm-ussd-7.2.1-SNAPSHOT/wildfly-10.0.0.Final/bin/*.sh && \
-    chown -R ussdgw:ussdgw /opt/restcomm
+COPY restcomm-ussd-${USSD_VERSION}-linux.zip /tmp/
+RUN unzip -q /tmp/restcomm-ussd-${USSD_VERSION}-linux.zip -d /opt/restcomm \
+ && rm /tmp/restcomm-ussd-${USSD_VERSION}-linux.zip \
+ && chmod +x ${JBOSS_HOME}/bin/*.sh \
+ && cp ${JBOSS_HOME}/bin/standalone.conf ${JBOSS_HOME}/bin/standalone.conf.bundled \
+ && chown -R ussdgw:ussdgw /opt/restcomm
 
-# Copy entrypoint script
-COPY docker-entrypoint.sh /opt/restcomm/
-RUN chmod +x /opt/restcomm/docker-entrypoint.sh
+COPY standalone.conf ${JBOSS_HOME}/bin/standalone.conf
+COPY scripts/ /opt/restcomm/scripts/
+COPY docker-entrypoint.sh /opt/restcomm/docker-entrypoint.sh
+RUN chmod +x /opt/restcomm/docker-entrypoint.sh /opt/restcomm/scripts/*.sh \
+ && chown -R ussdgw:ussdgw /opt/restcomm/scripts /opt/restcomm/docker-entrypoint.sh ${JBOSS_HOME}/bin/standalone.conf
 
-# Set environment
-ENV JBOSS_HOME=/opt/restcomm/restcomm-ussd-7.2.1-SNAPSHOT/wildfly-10.0.0.Final
-ENV JAVA_OPTS=""
-
-# Expose ports
 EXPOSE 8080 8443 9990 9993 8009 2905 2906 8011 8012
 
-# Healthcheck
-HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=5 \
     CMD curl -fs http://localhost:9990/health || exit 1
 
-# Entrypoint
 ENTRYPOINT ["/opt/restcomm/docker-entrypoint.sh"]
 CMD ["-b", "0.0.0.0", "-bmanagement", "0.0.0.0"]

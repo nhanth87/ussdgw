@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TCAPConfig>
+  <dialogTimeout>60000</dialogTimeout>
+  <invokeTimeout>30000</invokeTimeout>
+  <maxDialogs>10000</maxDialogs>
+  <dialogIdRangeStart>1</dialogIdRangeStart>
+  <dialogIdRangeEnd>2147483647</dialogIdRangeEnd>
+  <doNotSendProtocolVersion>false</doNotSendProtocolVersion>
+  <slsRange>All</slsRange>
+  <statisticsEnabled>false</statisticsEnabled>
+</TCAPConfig>
