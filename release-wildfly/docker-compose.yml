@@ -1,8 +1,23 @@
 services:
+  init:
+    image: alpine:3.19
+    container_name: ussdgw-init
+    user: "0:0"
+    restart: "no"
+    volumes:
+      - /opt/ussdgw:/opt/ussdgw
+      - ./config-seed:/bundled-seed:ro
+      - ./standalone.conf:/bundled/standalone.conf:ro
+      - ./scripts/host-init.sh:/host-init.sh:ro
+    command: ["/bin/sh", "/host-init.sh"]
+
   ussdgw:
     image: restcomm-ussd:7.2.1-SNAPSHOT
     container_name: ussdgw
     hostname: ussdgw
+    depends_on:
+      init:
+        condition: service_completed_successfully
 
     network_mode: host
 
