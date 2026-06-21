@@ -82,8 +82,9 @@ cd /opt/ussdgw-test
 ./scripts/01-load-docker-image.sh
 ```
 
-**Phải thấy:** `Loaded image: restcomm-ussd:7.2.1-SNAPSHOT`  
-Hoặc: `Image restcomm-ussd:7.2.1-SNAPSHOT already loaded — skip`
+**Phải thấy:** `Loaded image: restcomm-ussd:7.2.1-SNAPSHOT`
+
+Script tự **dừng gateway**, **xóa image `restcomm-ussd` cũ**, rồi `docker load` từ file `.tar`.
 
 Kiểm tra:
 
@@ -287,7 +288,7 @@ Trong cửa sổ GUI:
 
 | Bước | Lệnh | Tương đương thủ công |
 |------|------|----------------------|
-| Load image | `./scripts/01-load-docker-image.sh` | `docker load -i docker/restcomm-ussd-7.2.1-SNAPSHOT.tar` |
+| Load image | `./scripts/01-load-docker-image.sh` | `compose down` + `docker rmi` cũ + `docker load -i docker/...tar` |
 | Setup host | `sudo ./scripts/02-setup-host.sh` | Tạo `/opt/ussdgw/data` |
 | **Start GW** | `./scripts/03-start-gateway.sh` | **`cd gateway && docker compose up -d`** |
 | Stop GW | `./scripts/04-stop-gateway.sh` | **`cd gateway && docker compose down`** |
