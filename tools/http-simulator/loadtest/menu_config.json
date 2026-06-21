@@ -1,0 +1,29 @@
+{
+  "root": "main",
+  "nodes": {
+    "main": {
+      "text": "Welcome to Jenny USSD Demo\n1. Balance\n2. Data bundles\n3. Subscribe\n0. Exit",
+      "options": {"1": "balance", "2": "data", "3": "subscribe", "0": "__end__"}
+    },
+    "balance": {
+      "text": "Your balance is $100.50\n1. Main menu\n0. Exit",
+      "options": {"1": "main", "0": "__end__"}
+    },
+    "data": {
+      "text": "Data bundles:\n1. 1GB - $1\n2. 5GB - $4\n9. Back",
+      "options": {"1": "data_confirm", "2": "data_confirm", "9": "main"}
+    },
+    "data_confirm": {
+      "text": "Bundle activated. Thank you!",
+      "final": true
+    },
+    "subscribe": {
+      "text": "Enter amount to subscribe:",
+      "options": {"*": "subscribe_done"}
+    },
+    "subscribe_done": {
+      "text": "Subscription request received. Thank you!",
+      "final": true
+    }
+  }
+}
