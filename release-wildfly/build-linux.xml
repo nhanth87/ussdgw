@@ -181,6 +181,9 @@
         <!-- Fix WildFly 10 module name: org.hibernate.orm. -> org.hibernate -->
         <replace file="${jboss.modules.path}/org/restcomm/slee/container/lib/main/module.xml" token='        &lt;module name="org.hibernate.orm." export="true"/&gt;' value='        &lt;module name="org.hibernate" export="true"/&gt;' />
 
+        <!-- HTTP Servlet RA + SS7 API classes visible to SLEE container / RA classloaders -->
+        <replace file="${jboss.modules.path}/org/restcomm/slee/container/lib/main/module.xml" token='    &lt;/dependencies&gt;' value='        &lt;module name="org.restcomm.slee.resource.http.common" export="true"/&gt;${line.separator}        &lt;module name="org.restcomm.ss7.modules" export="true"/&gt;${line.separator}    &lt;/dependencies&gt;' />
+
         <!-- Alias module: org.apache.commons.pool2 -> org.apache.commons.pool -->
         <mkdir dir="${jboss.modules.path}/org/apache/commons/pool2/main"/>
         <echo file="${jboss.modules.path}/org/apache/commons/pool2/main/module.xml"><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
@@ -241,9 +244,22 @@
         <echo>Copy RestComm HTTP Client RA DU from local .m2</echo>
         <copy file="${m2.repo}/org/mobicents/resources/http-client-ra-DU/${restcomm-slee.http.version}/http-client-ra-DU-${restcomm-slee.http.version}.jar" todir="${deploy.dir}" failonerror="true" />
 
-        <!-- deploy: HTTP Servlet RA DU from Maven local repo -->
-        <echo>Copy RestComm HTTP Servlet RA DU from local .m2</echo>
-        <copy file="${m2.repo}/org/mobicents/resources/http-servlet-ra-DU/${restcomm-slee.http.version}/http-servlet-ra-DU-${restcomm-slee.http.version}.jar" todir="${deploy.dir}" failonerror="true" />
+        <!-- deploy: HTTP Servlet RA DU (prefer local workspace build) -->
+        <echo>Copy RestComm HTTP Servlet RA DU</echo>
+        <copy todir="${deploy.dir}" failonerror="false" flatten="true">
+            <fileset dir="${jain-slee-http.dir}/resources/http-servlet/du/target">
+                <include name="http-servlet-ra-DU-*.jar"/>
+                <include name="restcomm-slee-ra-http-servlet-DU-*.jar"/>
+            </fileset>
+            <mapper type="glob" from="*" to="http-servlet-ra-DU-${restcomm-slee.http.version}.jar"/>
+        </copy>
+        <available file="${deploy.dir}/http-servlet-ra-DU-${restcomm-slee.http.version}.jar" property="http.servlet.du.exists"/>
+        <copy file="${m2.repo}/org/mobicents/resources/http-servlet-ra-DU/${restcomm-slee.http.version}/http-servlet-ra-DU-${restcomm-slee.http.version}.jar"
+              todir="${deploy.dir}"
+              failonerror="false"/>
+        <available file="${deploy.dir}/http-servlet-ra-DU-${restcomm-slee.http.version}.jar" property="http.servlet.du.exists"/>
+        <fail unless="http.servlet.du.exists"
+              message="HTTP Servlet RA DU missing. Build: mvn -f ${jain-slee-http.dir}/resources/http-servlet/pom.xml clean install -Dmaven.test.skip=true"/>
 
         <!-- deploy: JDBC RA DU from Maven local repo -->
         <echo>Copy RestComm JDBC RA DU from local .m2</echo>

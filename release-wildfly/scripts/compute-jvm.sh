@@ -7,17 +7,18 @@ compute_cgroup_memory_bytes() {
     if [ -f /sys/fs/cgroup/memory.max ]; then
         mem=$(cat /sys/fs/cgroup/memory.max 2>/dev/null)
         if [ "$mem" = "max" ] || [ -z "$mem" ]; then
-            mem=$(awk '/MemTotal/ {print $2 * 1024}' /proc/meminfo 2>/dev/null)
+            mem=$(awk '/MemTotal/ {printf "%.0f", $2 * 1024}' /proc/meminfo 2>/dev/null)
         fi
     elif [ -f /sys/fs/cgroup/memory/memory.limit_in_bytes ]; then
         mem=$(cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null)
         if [ "$mem" -gt 9223372036854770000 ] 2>/dev/null; then
-            mem=$(awk '/MemTotal/ {print $2 * 1024}' /proc/meminfo 2>/dev/null)
+            mem=$(awk '/MemTotal/ {printf "%.0f", $2 * 1024}' /proc/meminfo 2>/dev/null)
         fi
     else
-        mem=$(awk '/MemTotal/ {print $2 * 1024}' /proc/meminfo 2>/dev/null)
+        mem=$(awk '/MemTotal/ {printf "%.0f", $2 * 1024}' /proc/meminfo 2>/dev/null)
     fi
-    echo "${mem:-4294967296}"
+    # Bash $(( )) cannot parse scientific notation (e.g. 3.97e+09 from some awk builds)
+    awk 'BEGIN { v = '"${mem:-4294967296}"'; if (v < 1) v = 4294967296; printf "%.0f", v }'
 }
 
 compute_cgroup_cpus() {
@@ -56,7 +57,7 @@ compute_auto_jvm_opts() {
     local mem_bytes cpus mem_gb heap direct pause gc_threads conc_threads
     mem_bytes=$(compute_cgroup_memory_bytes)
     cpus=$(compute_cgroup_cpus)
-    mem_gb=$(( mem_bytes / 1024 / 1024 / 1024 ))
+    mem_gb=$(awk 'BEGIN { printf "%d", '"${mem_bytes}"' / 1024 / 1024 / 1024 }')
 
     if [ "$mem_gb" -le 4 ]; then
         heap="2g"; direct="512m"; pause="200"; gc_threads=2; conc_threads=1
