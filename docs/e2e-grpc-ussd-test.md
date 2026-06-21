@@ -54,11 +54,17 @@ cd ussdgw-test
 ## Bước 1 — Bật SCTP kernel
 
 ```bash
+lsmod | grep sctp
+```
+
+**Phải thấy** dòng `sctp` (ví dụ `sctp 557056 20`). Không có:
+
+```bash
 sudo modprobe sctp
 lsmod | grep sctp
 ```
 
-**Phải thấy** dòng chứa `sctp`. Không có → MAP test sẽ fail.
+`00-preflight.sh` và `02-setup-host.sh` cũng kiểm tra SCTP qua `lsmod | awk '/^sctp /'`.
 
 ---
 
@@ -75,32 +81,86 @@ Nếu `FAIL missing docker tar` → file `docker/restcomm-ussd-7.2.1-SNAPSHOT.ta
 
 ---
 
-## Bước 3 — Load image Docker vào máy
+## Bước 3 — Load image Docker (không dừng gateway)
 
 ```bash
 cd /opt/ussdgw-test
 ./scripts/01-load-docker-image.sh
 ```
 
-**Phải thấy:** `Loaded image: restcomm-ussd:7.2.1-SNAPSHOT`
+**Mặc định:** `docker load` — gateway vẫn chạy. **Backup `/opt/ussdgw`** → `backups/ussdgw-<timestamp>/ussdgw-host.tgz` (nếu thư mục tồn tại).
 
-Script tự **dừng gateway**, **xóa image `restcomm-ussd` cũ**, rồi `docker load` từ file `.tar`.
+Ghi `gateway/.env` với tag release riêng (`docker/package.manifest`).
 
-Kiểm tra:
+**Image cũ được giữ** trên máy để rollback — không tự xóa.
 
 ```bash
 docker images restcomm-ussd
+./scripts/01-load-docker-image.sh --list-images
+ls backups/
+```
+
+| Flag | Dùng khi |
+|------|----------|
+| *(mặc định)* | Chuẩn bị nâng cấp + backup host |
+| `--switch` | Backup + load + recreate gateway |
+| `--fresh-install` | Reset lab — xóa **tất cả** image cũ |
+| `--prune --keep N` | Dọn disk (giữ N bản + đang chạy + previous) |
+| `--no-backup` | Bỏ qua backup `/opt/ussdgw` |
+| `--list-images` | Xem tag + lịch sử switch |
+
+## Bước 3b — Switch gateway (downtime ngắn)
+
+```bash
+./scripts/03-switch-gateway.sh
+```
+
+Backup host lần nữa, lưu image cũ vào `gateway/.env.previous`, recreate container.
+
+## Bước 3c — Rollback nếu bản mới lỗi
+
+**Rollback image Docker:**
+
+```bash
+./scripts/03-switch-gateway.sh --rollback
+./scripts/03-switch-gateway.sh --to restcomm-ussd:7.2.1-SNAPSHOT-20260621T120000-abc
+./scripts/03-switch-gateway.sh --list-images
+```
+
+**Rollback config host:**
+
+```bash
+./scripts/02-setup-host.sh --list-backups
+sudo ./scripts/02-setup-host.sh --restore backups/ussdgw-20260621T154000Z/
+./scripts/03-switch-gateway.sh --rollback
+```
+
+**Nâng cấp production:**
+
+```bash
+./scripts/01-load-docker-image.sh
+./scripts/03-switch-gateway.sh
+./scripts/08-check-gateway.sh
+# nếu lỗi:
+./scripts/03-switch-gateway.sh --rollback
+sudo ./scripts/02-setup-host.sh --restore backups/ussdgw-<timestamp>/
 ```
 
 ---
 
-## Bước 4 — Tạo thư mục config trên host (`/opt/ussdgw`)
+## Bước 4 — Setup host (`/opt/ussdgw`)
 
 ```bash
 sudo ./scripts/02-setup-host.sh
 ```
 
-Script copy config test (rule `*100#` gRPC, bridge bật) vào `/opt/ussdgw/data/`.
+Tạo thư mục host, copy config-seed test. Nếu `data/` đã có → **tự backup** trước khi ghi đè.
+
+| Flag | Mục đích |
+|------|----------|
+| `--list-backups` | Liệt kê backup |
+| `--restore <dir>` | Khôi phục `/opt/ussdgw` |
+| `--no-seed` | Chỉ init thư mục, không ghi đè XML |
 
 ---
 
@@ -288,7 +348,10 @@ Trong cửa sổ GUI:
 
 | Bước | Lệnh | Tương đương thủ công |
 |------|------|----------------------|
-| Load image | `./scripts/01-load-docker-image.sh` | `compose down` + `docker rmi` cũ + `docker load -i docker/...tar` |
+| Load image | `./scripts/01-load-docker-image.sh` | backup `/opt/ussdgw` + `docker load` (GW vẫn chạy) |
+| Switch GW | `./scripts/03-switch-gateway.sh` | backup + recreate; lưu `.env.previous` |
+| Rollback GW | `./scripts/03-switch-gateway.sh --rollback` | image cũ vẫn trên disk |
+| Restore host | `./scripts/02-setup-host.sh --restore <dir>` | khôi phục `/opt/ussdgw` |
 | Setup host | `sudo ./scripts/02-setup-host.sh` | Tạo `/opt/ussdgw/data` |
 | **Start GW** | `./scripts/03-start-gateway.sh` | **`cd gateway && docker compose up -d`** |
 | Stop GW | `./scripts/04-stop-gateway.sh` | **`cd gateway && docker compose down`** |
@@ -321,8 +384,12 @@ python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
 ```bash
 sudo modprobe sctp
 
-# Load image (nếu chưa có)
-docker load -i /path/to/ussdgw-test/docker/restcomm-ussd-7.2.1-SNAPSHOT.tar
+# Stop gateway + remove old image, then load new tar
+cd /path/to/ussdgw-test/gateway
+docker compose down --remove-orphans
+docker rm -f ussd-ng ussd-ng-init 2>/dev/null || true
+docker images restcomm-ussd --format '{{.Repository}}:{{.Tag}}' | xargs -r docker rmi -f
+docker load -i ../docker/restcomm-ussd-7.2.1-SNAPSHOT.tar
 
 # Setup host + config
 cd /path/to/ussdgw-test
@@ -398,6 +465,10 @@ Chi tiết thiết kế: [`docs/design/bridge-unified-reconciliation-rfc.md`](de
 | gRPC connection refused | AS chưa chạy | `./scripts/05-start-grpc-as.sh` hoặc xem `grpc-as.log` |
 | `FailedScenario` cao | AS chậm / GW chưa ready | Đợi GW healthy; chạy lại sau `start-all.sh` |
 | `docker load` lỗi | File tar hỏng/thiếu | Copy lại `docker/*.tar` |
+| Gateway vẫn bản cũ | Chưa switch | `./scripts/03-switch-gateway.sh` |
+| Bản mới lỗi | Cần quay lại | `./scripts/03-switch-gateway.sh --rollback` |
+| Config hỏng | data bị ghi đè | `02-setup-host.sh --restore backups/ussdgw-*/` |
+| SCTP / MAP fail | Module chưa load | `sudo modprobe sctp` + `lsmod \| grep sctp` |
 | Python pip lỗi | Không có mạng | Package có `wheels/` — script tự cài offline |
 
 **Xem log:**
