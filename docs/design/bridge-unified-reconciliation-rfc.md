@@ -164,8 +164,8 @@ public enum ReconcileChannel {
 }
 
 public final class ReconcileResult {
-    public enum Outcome { DELIVERED, QUEUED, DUPLICATE, UNKNOWN, EXPIRED, DISABLED }
-    // ...
+    public enum Outcome { DELIVERED, QUEUED, DUPLICATE, UNKNOWN, EXPIRED, ABORTED, DISABLED }
+    // ABORTED → network tore down the dialogue (§13.2); drop, no S2.
 }
 
 /**
@@ -203,10 +203,13 @@ stateDiagram-v2
   WAIT_AS --> COMPLETED: sync before gate
   WAIT_AS --> BRIDGED: gate fires
   WAIT_AS --> DEFERRED: HTTP 202 / empty sync (optional P9)
+  WAIT_AS --> ABORTED: MSC/TCAP abort (network-initiated)
+  BRIDGED --> ABORTED: MSC/TCAP abort before push
   DEFERRED --> PUSH_PENDING: push channel payload
   BRIDGED --> PUSH_PENDING: late response (sync OR push channel)
   PUSH_PENDING --> COMPLETED: user receives S2
   BRIDGED --> EXPIRED: TTL, no response
+  ABORTED --> [*]
 ```
 
 ### 6.1 Allowed transitions (changes)
@@ -215,8 +218,46 @@ stateDiagram-v2
 |------|-------|-----|
 | `BRIDGED` | late response (any channel) | `PUSH_PENDING` |
 | `WAIT_AS` | HTTP 202 / empty 200 with `requestId` | `DEFERRED` or stay `WAIT_AS` until gate — **config**: `bridgeDeferOn202` |
+| `WAIT_AS` / `BRIDGED` | **MSC / TCAP / Provider Abort** (network ended the dialogue) | `ABORTED` — **no S2 push** (see §13.2) |
 
 Gate timer behaviour unchanged: at gate, if still `WAIT_AS` → release S1 → `BRIDGED`.
+
+`ABORTED` is **terminal** and distinct from `EXPIRED`: `EXPIRED` = our TTL elapsed with no AS
+response; `ABORTED` = the **network** tore down the transaction, so the late AS response must be
+dropped (a push would re-open a session the MSC already considers closed). Maps to a new terminal
+in `FsmState` alongside `COMPLETED`/`FAILED`/`EXPIRED`.
+
+### 6.2 Atomic transition requirement (**critical**)
+
+Current code path `getByRequestId → check state → transitionTo → save` is a **non-atomic
+read-modify-write**. `VirtualSession.transitionTo()` mutates an in-memory field and
+`InfinispanVirtualSessionStore.save()` is a plain `put()` — **not** a compare-and-swap.
+
+With the **two-channel** design (Channel A sync + Channel B push may arrive concurrently for the
+same `requestId`) this is a real race: both readers observe `BRIDGED`, both transition to
+`PUSH_PENDING`, both dispatch S2 → **double NI push / double charge**.
+
+**Mandatory fix in Phase 2a** — add an atomic transition to `VirtualSessionStore`:
+
+```java
+/**
+ * Atomically transition the session for this correlationId from {@code expected} to {@code next}.
+ * @return the updated session if the CAS succeeded, or {@code null} if the current state was not
+ *         {@code expected} (lost the race / already delivered).
+ */
+VirtualSession compareAndTransition(String correlationId, FsmState expected, FsmState next);
+```
+
+Implementations:
+
+- `InMemoryVirtualSessionStore`: guard with `ConcurrentHashMap.compute(...)` on the correlationId.
+- `InfinispanVirtualSessionStore`: use `cache.replace(key, oldValue, newValue)` (Infinispan
+  implements the atomic `ConcurrentMap.replace`), retry-on-false loop. **No new Infinispan API
+  dependency** — `replace` is part of the `ConcurrentMap` contract already used.
+
+`BridgeReconciler.reconcileLateResponse` (§5) must perform the `BRIDGED → PUSH_PENDING` step **only**
+via `compareAndTransition`; the loser of the CAS returns `DUPLICATE`. This is the single
+idempotency point for both channels and the billing-safety guarantee (§13.1).
 
 ### 6.2 HTTP 202 (optional, Phase 2b)
 
@@ -411,6 +452,10 @@ Metrics (rename / add):
 | T9 | Cold push without requestId | Unchanged |
 | T10 | Push with requestId, active MO queue-back | Retry queue |
 | T11 | `sessionBridgeEnabled=false` | Legacy drop / no reconcile |
+| T12 | **Concurrent sync + push, same requestId** | Exactly one S2; CAS loser → DUPLICATE (no double charge) |
+| T13 | **MSC/TCAP abort then late AS response** | State `ABORTED`; response dropped; no S2 |
+| T14 | Out-of-order: input gen N+1 then late response gen N | Stale response dropped (§13.3) |
+| T15 | Late response after `bridgeStateTtlSec` | `EXPIRED` metric, optional fallback |
 
 Unit: `BridgeReconcilerTest`, extend `VirtualSessionFsmTest` for sync reconcile from `BRIDGED`.
 
@@ -422,28 +467,140 @@ Integration: extend `tools/grpc-as-tester` with “slow AS, sync response after 
 
 | Phase | Scope | Files |
 |-------|-------|-------|
-| **2a** | `BridgeReconciler` + HttpClientSbb + HttpServerSbb refactor + docs | session-bridge, HttpClientSbb, HttpServerSbb, SessionBridgeSupport |
+| **2a** | **`compareAndTransition` CAS (§6.2)** + `ABORTED` state + `markAborted` (§13.2) + `BridgeReconciler` + HttpClientSbb + HttpServerSbb refactor + docs | session-bridge (stores, FsmState), ChildSbb, HttpClientSbb, HttpServerSbb, SessionBridgeSupport |
 | **2b** | GrpcClientSbb + extend GrpcResponse requestId + poll window | grpc-as library, GrpcClientSbb |
-| **2c** | SipClientSbb + SipServerSbb headers + reconcile | SipClientSbb, SipServerSbb |
-| **2d** | HTTP 202 deferral (optional) | HttpClientSbb, UssdPropertiesManagement |
+| **2c** | SipClientSbb + SipServerSbb headers + reconcile + abort mapping | SipClientSbb, SipServerSbb |
+| **2d** | HTTP 202 deferral (optional) + `inputGeneration` ordering (§13.3) | HttpClientSbb, VirtualSession, UssdPropertiesManagement |
+| **2e** | Backpressure (rate limit + circuit breaker, §13.5) + adaptive outlier guard (§13.8) | PushRetryQueue, AdaptiveTimeout |
+| **3** | Clustered / persistent store (§13.7) | new `VirtualSessionStore` impl (HotRod / Redis) |
 
-Estimated LOC: ~400 production + ~300 tests (Phase 2a–2c).
+Estimated LOC: ~500 production + ~350 tests (Phase 2a–2c). **CAS + abort mapping are non-negotiable
+for production** (billing safety); ordering, backpressure, clustering can ship incrementally.
 
 ---
 
-## 13. Open questions for review
+## 13. Carrier-grade hardening (from design review, 2026-06-21)
+
+A detailed review ([`discussion_adaptive_timeout.md`](../../discussion_adaptive_timeout.md)) raised
+10 telecom edge cases. Below is the **verified** position after auditing the actual code, separating
+real gaps from items already implemented.
+
+### 13.0 Already implemented (no action)
+
+| Reviewer concern | Reality in code |
+|------------------|-----------------|
+| Adaptive gate could exceed MAP timer | `AdaptiveTimeout.suggestGateMs` clamps to `[1000ms, configuredGate]`; `SessionBridgeSupport.gateTimeoutMs` forces `gate < dialogTimeout`. Ceiling is safe. |
+| Session memory leak / no hard TTL | Absolute TTL exists: `VirtualSession.expireAtMillis` + `bridgeStateTtlSec=180`, lazy expiry in both stores. |
+| EWMA params unknown | `ALPHA=0.2`, `HEADROOM=1.5`, `FLOOR=1000ms`, **per-networkId**. |
+| “SessionBridgeSupport missing” | Exists at `core/slee/sbbs/.../slee/SessionBridgeSupport.java`. |
+| “README per-MSISDN vs RFC per-requestId contradiction” | Both, different purpose — see §13.4. |
+
+### 13.1 Billing safety / duplicate response (review #2, #7) — **critical**
+
+Root cause = the non-atomic transition (§6.2). The fix is the `compareAndTransition` CAS: exactly
+one late response per `requestId` wins `BRIDGED → PUSH_PENDING`; all others (sync retry, push
+retry, AS-side retry) return `DUPLICATE` and are ack-only. The gateway **never** triggers AS
+re-execution — it only re-delivers a cached menu on push retry, never re-sends the MO request to
+the AS. Idempotency key on the wire = `requestId` (mandatory header in §4).
+
+### 13.2 Network abort vs gate timeout (review #3, #10) — **critical**
+
+The gateway must distinguish:
+
+| Event | Source | Action |
+|-------|--------|--------|
+| Gate timer fires | Gateway (we choose to bridge) | `WAIT_AS → BRIDGED`, push S2 when AS replies |
+| MAP/TCAP **Provider/User Abort**, Dialog released by MSC | Network | `→ ABORTED`, **drop** any late AS response, no S2 |
+
+Implementation: in the abort/dialog-release handlers of `ChildSbb` (MO) — `onDialogProviderAbort`,
+`onDialogUserAbort`, `onDialogRelease`, `onDialogTimeout` when network-initiated — call
+`bridge.markAborted(correlationId)` which CAS-transitions to `ABORTED`. A later
+`reconcileLateResponse` finding state `ABORTED`/terminal returns `UNKNOWN`/`DUPLICATE` and drops.
+
+This prevents the “zombie session” reopen (#3): once the MSC considers the dialogue closed, S2 would
+be a fresh NI dialogue the subscriber never asked for.
+
+### 13.3 Response ordering across multiple inputs (review #4)
+
+`VirtualSession` tracks `attempt` but not a per-input generation. When a user sends input #1 then
+input #2 quickly and both bridge, an out-of-order late response could overwrite the newer menu.
+
+**Add** `inputGeneration` (monotonic per virtual session): the MO path increments it on each user
+input and stamps it on the `requestId`. `reconcileLateResponse` drops a payload whose generation is
+**older** than the session’s current generation (stale). Low frequency in practice (USSD is
+half-duplex per dialogue) but required for correctness under retry / double-tap.
+
+### 13.4 Idempotency scope clarification (review question D)
+
+Two independent mechanisms — **not** a contradiction:
+
+| Mechanism | Key | Purpose |
+|-----------|-----|---------|
+| MO double-submit lock | `lock:{msisdn}` (TTL 5s) | Reject a second MO while one is in flight (P1) |
+| Late-response idempotency | `req:{requestId}` + CAS transition | Deliver each AS late response exactly once (§13.1) |
+
+### 13.5 Backpressure / retry storm (review #5)
+
+`PushRetryQueue` capacity = 16384 (JCTools, bounded); overflow → `NotificationFallback`. For
+100k+ concurrent bridged sessions add (Phase 2e, optional):
+
+- Per-network NI-push rate limit (token bucket) so a recovering AS burst does not flood the MSC.
+- Circuit breaker: when push failure ratio over a window exceeds a threshold, shed to fallback
+  instead of retrying.
+
+### 13.6 TTL hierarchy (review #6) — make explicit
+
+Invariant the operator config must satisfy:
+
+```
+FLOOR (1s) ≤ adaptiveGate ≤ asyncGateTimeoutMs < dialogTimeout < MAP/TCAP network timer
+                                                         ⌐ and ⌐
+                            adaptiveGate ≤ asyncGateTimeoutMs ≤ bridgeStateTtlSec (absolute)
+```
+
+`reconcileLateResponse` arriving after `bridgeStateTtlSec` → cache miss → `EXPIRED` metric +
+optional SMS fallback (P12). Document that `bridgeStateTtlSec` must cover the **slowest acceptable**
+AS (e.g. 180s) but bounded to cap memory at high concurrency.
+
+### 13.7 Single-node affinity / restart (review #8, #9) — scope statement
+
+`InfinispanVirtualSessionStore` is a **local embedded** cache (JNDI `getCache`, plain put), **not**
+HotRod/clustered, **no persistence** by default. Therefore, for this RFC:
+
+- **Requirement:** an MO request and its late response (both channels) **must** land on the **same
+  node**. Deploy with load-balancer **session affinity by MSISDN** (or single-node bridge).
+- On node restart, in-flight bridged sessions are lost → those late responses become `EXPIRED`
+  (fallback applies). Acceptable for MVP.
+- **Out of scope (Phase 3):** clustered Infinispan (HotRod/dist-cache) or external store (Redis /
+  RocksDB / ChronicleMap) for cross-node + restart durability. The store interface already isolates
+  this — only a new `VirtualSessionStore` implementation is needed.
+
+### 13.8 Adaptive timeout refinements (optional, Phase 2e)
+
+Current EWMA is robust and cheap. Possible later improvements (not blocking):
+
+- Outlier guard: ignore latency samples above `k × current EWMA` so a single p99 spike does not
+  inflate the gate.
+- Per-operation-type tracking (balance inquiry vs bank transfer) if AS exposes a class hint.
+
+---
+
+## 14. Open questions for review
 
 1. **gRPC poll window:** extend polling until `dialogTimeout` after gate, or rely on push channel only for gRPC late responses?
 2. **SIP header names:** confirm `X-Ussd-Request-Id` / `X-Ussd-Session-Id` acceptable for operator SIP peers.
 3. **HTTP 202:** implement in 2a or defer to 2d?
-4. **VirtualSession payload cache:** should reconciler store last menu on session for push retry (today retry uses `serviceCode` string only — may need `lastMenu` field)?
+4. **VirtualSession payload cache:** push retry today uses `serviceCode` string only; `VirtualSession` already has a `lastMenu` field — reconciler should populate it so retries re-deliver the real menu. Confirm.
+5. **Abort hooks coverage:** which exact `ChildSbb` MAP callbacks signal a *network* abort vs our own timeout? Need to enumerate per jSS7 (ProviderAbort / UserAbort / DialogTimeout / DialogRelease) to wire §13.2 correctly.
+6. **Affinity:** is LB session-affinity-by-MSISDN acceptable for digicom-et deployment, or is single-node bridge fine for MVP (§13.7)?
 
 ---
 
-## 14. Approval
+## 15. Approval
 
 - [ ] Product / ông chủ — contract OK for digicom-et AS teams  
-- [ ] Gateway — reconciler API  
-- [ ] QA — test matrix T1–T11  
+- [ ] Gateway — reconciler API + **atomic CAS transition (§6.2)** + **abort mapping (§13.2)**  
+- [ ] QA — test matrix T1–T11 + race test (concurrent sync+push), abort-drop test  
 
-**Do not merge implementation until this RFC is approved.**
+**Do not merge implementation until this RFC is approved.**  
+**Blocking for production:** §6.2 atomic transition and §13.2 network-abort mapping (billing safety).
