@@ -1,15 +1,25 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-echo "=== Building RestComm USSD Gateway Docker Image ==="
-echo "Step 1: Build Linux release package..."
+VERSION="${USSD_VERSION:-7.2.1-SNAPSHOT}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "=== Step 1: Build Linux release package ==="
+cd "${SCRIPT_DIR}"
 ant -f build-linux.xml clean release
 
 echo ""
-echo "Step 2: Build Docker image..."
-docker build -t restcomm-ussd:7.2.1-SNAPSHOT .
+echo "=== Step 2: Build Docker image ==="
+docker build \
+  --build-arg "USSD_VERSION=${VERSION}" \
+  -t "restcomm-ussd:${VERSION}" \
+  -t "restcomm-ussd:latest" \
+  .
 
 echo ""
-echo "=== DONE ==="
-echo "Image: restcomm-ussd:7.2.1-SNAPSHOT"
-echo "Run: docker run -p 8080:8080 -p 9990:9990 restcomm-ussd:7.2.1-SNAPSHOT"
+echo "=== Done ==="
+echo "Image: restcomm-ussd:${VERSION}"
+echo ""
+echo "Host setup:  sudo ./setup-server.sh"
+echo "Production:  docker compose up -d"
+echo "Dev:         docker compose -f docker-compose.dev.yml up -d"

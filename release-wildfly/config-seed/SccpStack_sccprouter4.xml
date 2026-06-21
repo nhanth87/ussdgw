@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<RouterConfig>
+  <longMessageRules>
+  </longMessageRules>
+  <saps>
+    <mtp3ServiceAccessPoint id="1" mtp3Id="1" opc="2" ni="2" networkId="0">
+      <mtp3DestinationMap>
+        <mtp3Destination id="1" firstDpc="1" lastDpc="1" firstSls="0" lastSls="255" slsMask="255"/>
+      </mtp3DestinationMap>
+    </mtp3ServiceAccessPoint>
+  </saps>
+</RouterConfig>

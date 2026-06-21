@@ -1,0 +1,48 @@
+services:
+  ussdgw:
+    image: restcomm-ussd:7.2.1-SNAPSHOT
+    container_name: ussdgw
+    hostname: ussdgw
+
+    network_mode: host
+
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    privileged: true
+
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
+
+    deploy:
+      resources:
+        limits:
+          memory: 8g
+          cpus: "4"
+
+    volumes:
+      - /opt/ussdgw/data:/opt/ussdgw/data
+      - /opt/ussdgw/log:/opt/ussdgw/log
+      - /opt/ussdgw/standalone.conf:/opt/ussdgw/standalone.conf:ro
+      - /opt/ussdgw/patched_jar:/opt/ussdgw/patched_jar:ro
+      - /opt/ussdgw/config-seed:/opt/ussdgw/config-seed:ro
+
+    environment:
+      - AUTO_JVM_ENABLED=true
+      - USSDGW_PROFILE=production
+      - USER_CONFIG_JVM=
+      - PATCH_FORCE=true
+      - PATCH_BACKUP=true
+      - TZ=Asia/Ho_Chi_Minh
+
+    stop_grace_period: 120s
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:9990/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 180s
+      retries: 5

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MAPStackConfigurationManagement>
+  <shortTimer>10000</shortTimer>
+  <mediumTimer>30000</mediumTimer>
+  <longTimer>600000</longTimer>
+</MAPStackConfigurationManagement>

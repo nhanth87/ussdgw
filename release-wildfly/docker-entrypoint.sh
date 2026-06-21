@@ -1,14 +1,53 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-JBOSS_HOME=/opt/restcomm/restcomm-ussd-7.2.1-SNAPSHOT/wildfly-10.0.0.Final
+JBOSS_HOME="${JBOSS_HOME:-/opt/restcomm/restcomm-ussd-${USSD_VERSION:-7.2.1-SNAPSHOT}/wildfly-10.0.0.Final}"
+SCRIPT_DIR="/opt/restcomm/scripts"
+USSDGW_HOST_BASE="${USSDGW_HOST_BASE:-/opt/ussdgw}"
 
+export JBOSS_HOME USSDGW_HOST_BASE
+
+# ── Phase 1: init directories, seed config, wire symlinks ──────────
+# shellcheck source=/dev/null
+source "${SCRIPT_DIR}/init-host-dirs.sh"
+
+# ── Phase 2: overlay hot-patch JARs from host mirror ─────────────────
+# shellcheck source=/dev/null
+source "${SCRIPT_DIR}/apply-patched-jars.sh"
+
+# ── Phase 3: auto-detect JVM heap/GC from cgroup ─────────────────────
+# shellcheck source=/dev/null
+source "${SCRIPT_DIR}/compute-jvm.sh"
+
+# ── Phase 4: merge JVM layers + profile extras ───────────────────────
+BASE_JAVA_OPTS=""
+if [ -f "${JBOSS_HOME}/bin/standalone.conf" ]; then
+    # shellcheck source=/dev/null
+    source "${JBOSS_HOME}/bin/standalone.conf"
+    BASE_JAVA_OPTS="${JAVA_OPTS:-}"
+fi
+
+PRODUCTION_JVM_EXTRAS=""
+if [ "${USSDGW_PROFILE:-lab}" = "production" ]; then
+    PRODUCTION_JVM_EXTRAS="-Djainslee.eventrouter.useDisruptor=true"
+    PRODUCTION_JVM_EXTRAS="$PRODUCTION_JVM_EXTRAS -Djainslee.eventrouter.threads=32"
+    PRODUCTION_JVM_EXTRAS="$PRODUCTION_JVM_EXTRAS -Djainslee.eventrouter.ringsize=65536"
+    PRODUCTION_JVM_EXTRAS="$PRODUCTION_JVM_EXTRAS -Djainslee.eventrouter.waitstrategy=blocking"
+    PRODUCTION_JVM_EXTRAS="$PRODUCTION_JVM_EXTRAS -Djainslee.eventrouter.multi.producer=false"
+    PRODUCTION_JVM_EXTRAS="$PRODUCTION_JVM_EXTRAS -Djainslee.eventrouter.collectStats=false"
+    PRODUCTION_JVM_EXTRAS="$PRODUCTION_JVM_EXTRAS -Djainslee.sbb.pool.min=500"
+    PRODUCTION_JVM_EXTRAS="$PRODUCTION_JVM_EXTRAS -Djainslee.sbb.pool.max=50000"
+    PRODUCTION_JVM_EXTRAS="$PRODUCTION_JVM_EXTRAS -Djainslee.sbb.pool.maxIdle=10000"
+    PRODUCTION_JVM_EXTRAS="$PRODUCTION_JVM_EXTRAS -Dio.netty.leakDetectionLevel=disabled"
+fi
+
+export JAVA_OPTS="${AUTO_JVM_OPTS:-} ${BASE_JAVA_OPTS} ${PRODUCTION_JVM_EXTRAS} ${USER_CONFIG_JVM:-}"
+
+# shellcheck source=/dev/null
+source "${SCRIPT_DIR}/print-banner.sh"
+
+# ── Phase 5: start WildFly as ussdgw ─────────────────────────────────
 if [ "$(id -u)" = "0" ]; then
-    echo "[entrypoint] Fixing mount permissions..."
-    chown -R ussdgw:ussdgw /opt/restcomm/restcomm-ussd-7.2.1-SNAPSHOT/wildfly-10.0.0.Final/standalone/data 2>/dev/null || true
-    chown -R ussdgw:ussdgw /opt/restcomm/restcomm-ussd-7.2.1-SNAPSHOT/wildfly-10.0.0.Final/standalone/log 2>/dev/null || true
-    chown ussdgw:ussdgw /opt/restcomm/restcomm-ussd-7.2.1-SNAPSHOT/wildfly-10.0.0.Final/bin/standalone.conf 2>/dev/null || true
-    echo "[entrypoint] Starting as ussdgw user..."
     exec gosu ussdgw "${JBOSS_HOME}/bin/standalone.sh" "$@"
 else
     exec "${JBOSS_HOME}/bin/standalone.sh" "$@"

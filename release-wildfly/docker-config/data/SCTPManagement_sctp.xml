@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sctp>
+  <connectdelay>5000</connectdelay>
+  <servers>
+    <server name="serv1" hostAddress="127.0.0.1" hostport="8012" started="true" ipChannelType="SCTP" acceptAnonymousConnections="false" maxConcurrentConnectionsCount="0"/>
+  </servers>
+  <associations>
+    <association hostAddress="127.0.0.1" hostPort="0" peerAddress="127.0.0.1" peerPort="8011" serverName="serv1" name="ass1" ipChannelType="SCTP" type="SERVER"/>
+  </associations>
+</sctp>
