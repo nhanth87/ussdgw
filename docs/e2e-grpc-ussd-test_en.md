@@ -164,8 +164,9 @@ File: `tools/grpc-as-tester/menu_config.json` (same content in `jSS7/map/load/sr
 ```bash
 cd /opt/ussdgw-test
 ./scripts/01-load-docker-image.sh
-docker images restcomm-ussd
 ```
+
+Stops the gateway stack, removes old `restcomm-ussd:*` images, then loads from the package `.tar`.
 
 ### Step 2 — Host setup (`/opt/ussdgw`)
 
