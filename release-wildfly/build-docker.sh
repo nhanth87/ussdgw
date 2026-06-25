@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-VERSION="${USSD_VERSION:-7.2.1-SNAPSHOT}"
+VERSION="${USSD_VERSION:-7.3.0-SNAPSHOT}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 JAIN_SLEE_AS7_DIR="${SCRIPT_DIR}/../../jain-slee/jain-slee/container/build/as7"
 JAIN_SLEE_HTTP_DIR="${SCRIPT_DIR}/../../jain-slee-http-okhttp/resources/http-servlet"
