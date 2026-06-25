@@ -5,7 +5,7 @@
     <property name="base.dir" location="${basedir}" />
     <property name="restcomm.ussd.dir" value="${basedir}/.." />
     <property name="m2.repo" value="${user.home}/.m2/repository" />
-    <property name="restcomm.ussd.release.version" value="7.2.1-SNAPSHOT"/>
+    <property name="restcomm.ussd.release.version" value="7.3.0-SNAPSHOT"/>
 
     <property name="wildfly.local.zip" value="${base.dir}/wildfly-10.0.0.Final-cleaned.zip" />
     <property name="wildfly.home.relative.path" value="wildfly-10.0.0.Final"/>
@@ -26,11 +26,13 @@
     <property name="jain-slee-jdbc.dir" value="${restcomm.ussd.dir}/../jain-slee.jdbc" />
     <property name="jain-slee-sip.dir" value="${restcomm.ussd.dir}/../jain-slee.sip" />
 
-    <property name="restcomm-jss7.version" value="9.2.12" />
-    <property name="restcomm-map-ra.version" value="9.2.12" />
+    <property name="restcomm-jss7.version" value="9.5.0" />
+    <property name="restcomm-map-ra.version" value="9.5.0" />
     <property name="restcomm-slee.http.version" value="7.0.0-SNAPSHOT" />
     <property name="restcomm-slee.jdbc.version" value="7.0.0-SNAPSHOT" />
     <property name="restcomm-slee.sip.version" value="7.0.0-SNAPSHOT" />
+    <property name="jolokia.war.version" value="1.7.2" />
+    <property name="jolokia.war.file" value="${m2.repo}/org/jolokia/jolokia-war/${jolokia.war.version}/jolokia-war-${jolokia.war.version}.war" />
 
     <target name="clean">
         <delete dir="${release.dir}" failonerror="false"/>
@@ -269,6 +271,13 @@
         <!-- deploy: JDBC RA DU from Maven local repo -->
         <echo>Copy RestComm JDBC RA DU from local .m2</echo>
         <copy file="${m2.repo}/org/restcomm/resources/restcomm-slee-ra-jdbc-DU/${restcomm-slee.jdbc.version}/restcomm-slee-ra-jdbc-DU-${restcomm-slee.jdbc.version}.jar" todir="${deploy.dir}" failonerror="true" />
+
+        <!-- deploy: Jolokia WAR — JMX bridge for ussd-management / jss7-management-console GUI -->
+        <echo>Copy Jolokia WAR</echo>
+        <available file="${jolokia.war.file}" property="jolokia.war.exists"/>
+        <fail unless="jolokia.war.exists"
+              message="jolokia-war missing. Run: mvn dependency:get -Dartifact=org.jolokia:jolokia-war:${jolokia.war.version}:war"/>
+        <copy file="${jolokia.war.file}" tofile="${deploy.dir}/jolokia.war" failonerror="true" />
 
         <!-- deploy: jSS7 OAM UI from local workspace -->
         <copy todir="${deploy.dir}" failonerror="true">

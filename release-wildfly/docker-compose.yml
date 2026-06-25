@@ -57,7 +57,7 @@ services:
     restart: unless-stopped
 
     healthcheck:
-      test: ["CMD", "curl", "-fs", "http://localhost:9990/health"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/jolokia/version || curl -fsS -u admin:admin -H 'Content-Type: application/json' -d '{\"operation\":\"read-attribute\",\"address\":[],\"name\":\"server-state\"}' http://127.0.0.1:9990/management | grep -q running"]
       interval: 30s
       timeout: 10s
       start_period: 300s

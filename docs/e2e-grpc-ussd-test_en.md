@@ -281,14 +281,14 @@ Compose file: `ussdgw-test/gateway/docker-compose.yml`
 cd /opt/ussdgw-test/gateway
 docker compose up -d
 docker compose ps
-curl -fs http://localhost:9990/health && echo " OK"
+curl -fs http://localhost:8080/jolokia/version && echo " OK"
 ```
 
 Wait **3–5 minutes** for WildFly (first boot: SLEE deploy + JAR patch). Logs: `docker logs -f ussd-ng`
 
 ```bash
 ./scripts/08-check-gateway.sh
-curl -fs http://localhost:9990/health && echo " OK"
+curl -fs http://localhost:8080/jolokia/version && echo " OK"
 ```
 
 Stop:
@@ -571,41 +571,322 @@ Legacy Swing GUI simulator (manual XML): `tools/http-simulator/bin/run.sh` — s
 
 ---
 
-## 8. Advanced scenarios
+## 8. Adaptive timeout & Virtual Session Bridge (headline feature)
 
-### 8.1 Adaptive timeout
+This section is the **primary acceptance target** for USSD Gateway: under high load, the gateway must keep MAP dialogs healthy, adapt the AS wait gate to real latency, and **recover late AS answers** via NI push instead of hard-failing the subscriber.
 
-**Gateway:** `sessionbridgeenabled=true`, `asyncgatetimeoutms=7000`
+Design references: [`docs/design/virtual-session-bridge.md`](design/virtual-session-bridge.md), [`docs/design/bridge-unified-reconciliation-rfc.md`](design/bridge-unified-reconciliation-rfc.md).
 
-**AS:**
+### 8.1 What the feature does
+
+| Mechanism | Purpose |
+|-----------|---------|
+| **Adaptive gate (EWMA)** | Per-network moving average of AS latency → dynamic gate in `[1000 ms, asyncGateTimeoutMs]` so fast AS gets shorter waits, slow-but-stable AS gets longer waits — without exceeding the configured ceiling. |
+| **Virtual Session Bridge** | When the adaptive gate expires before the AS responds on a **Pull MO** dialogue, release MAP dialogue S1 early, show `asyncWaitUserMessage`, keep virtual session in cache, deliver result later via **NI push S2**. |
+| **Unified reconciliation** | Late AS answer reconciled by `requestId` on **Channel A** (same gRPC/HTTP MO connection) or **Channel B** (`POST /restcomm` with header `X-Ussd-Request-Id`). |
+
+**Pull vs Push in this feature:**
+
+| Path | Trigger | Gateway SBB | Bridge role |
+|------|---------|-------------|-------------|
+| **Pull MO** | Subscriber dials `*100#` / `*519#` | `ChildSbb` → HTTP/gRPC/SIP client | Gate timer on MAP ACI; S1 release + S2 NI push when AS is slow |
+| **Push NI (cold)** | AS POSTs without `X-Ussd-Request-Id` | `HttpServerSbb` | Normal NI push — no prior MO bridge |
+| **Push NI (bridge S2)** | AS POSTs **with** `X-Ussd-Request-Id` | `HttpServerSbb` | Delivers menu after a bridged Pull MO |
+
+### 8.2 Timeout hierarchy (must stay ordered)
+
+The package `ussdgw-test` ships bridge **enabled** in [`gateway/config-seed/UssdManagement_ussdproperties.xml`](../../ussdgw-test/gateway/config-seed/UssdManagement_ussdproperties.xml):
+
+```xml
+<sessionbridgeenabled>true</sessionbridgeenabled>
+<asyncgatetimeoutms>7000</asyncgatetimeoutms>
+<dialogtimeout>60000</dialogtimeout>
+<!-- TCAP: TcapStack_management.xml dialogTimeout=90000 -->
+<asyncwaitusermessage>He thong dang ban, se update lai cho ban ngay</asyncwaitusermessage>
+<bridgestatettlsec>180</bridgestatettlsec>
+```
+
+**Invariant (lab + production):**
+
+```
+1000 ms ≤ adaptiveGate ≤ asyncGateTimeoutMs (7000) < dialogTimeout (60000) < TCAP dialogTimeout (90000)
+bridgeStateTtlSec (180) ≥ worst-case late AS + push retry window
+```
+
+| Property | Default (package) | Meaning |
+|----------|-------------------|---------|
+| `sessionBridgeEnabled` | `true` | Master switch; `false` = legacy hard timeout only |
+| `asyncGateTimeoutMs` | `7000` | Ceiling for adaptive gate; MO released when gate fires |
+| `dialogTimeout` | `60000` | Application timer if bridge off or gate already passed |
+| `asyncWaitUserMessage` | (see seed) | USSD text on S1 release while AS still processing |
+| `asyncHardFailMessage` | (see seed) | Text when AS hard-fails under load |
+| `bridgeStateTtlSec` | `180` | Virtual session TTL in cache |
+| `pushRetryDelaysMs` | `3000,8000,15000` | NI push retry back-off when MSC busy |
+
+**AS-side knobs (all load tools):**
+
+| Flag | Tool | Effect |
+|------|------|--------|
+| `--min-delay` / `--max-delay` | gRPC `ussd_as_server.py`, HTTP `http_as_server.py` | Random per-request latency → feeds EWMA adaptive gate |
+| `--bridge-delay MS` | same | Fixed delay **longer than gate** (use `8000` with 7000 ms gate) |
+| `--bridge-every N` | same | Apply bridge delay to 1-in-N requests (`1`=always, `10`=10%) |
+
+**Load generator knobs:**
+
+| Flag | Tool | Typical bridge/high-load value |
+|------|------|--------------------------------|
+| `--tps` | `loadtest_client.py`, `http_push_loadtest.py` | `200`–`1000` (ramp via warmup) |
+| `--duration` | same | `300` (5 min sustained) |
+| `--multi-menu` / `--profile ADAPTIVE` | gRPC load / MAP client | Multi-turn + variable think time |
+| `--think-min` / `--think-max` | gRPC load, HTTP push, MAP args 27–28 | `50` / `300` ms — gaps between user digits |
+| `--warmup` (default ON) | all load tools | 60 s ramp 1→…→target TPS — **required** before judging bridge at 1000 TPS |
+| `-Dwarmup=false` | MAP `Client.java` | Disable ramp (stress only) |
+
+### 8.3 Call flow — Pull MO (gRPC / HTTP)
+
+#### 8.3.1 S1 fast path (AS answers before gate)
+
+```mermaid
+sequenceDiagram
+  participant User
+  participant MAP as MAP_Client
+  participant GW as USSD_GW_ChildSbb
+  participant AS as Application_Server
+
+  User->>MAP: USSD *100#
+  MAP->>GW: ProcessUnstructuredSSRequest
+  GW->>AS: Pull MO request correlationId requestId
+  AS-->>GW: menu XML before gate
+  GW->>MAP: UnstructuredSSRequest menu
+  MAP->>User: menu on handset
+  Note over GW: EWMA records AS latency
+  Note over GW: CDR single record no bridge
+```
+
+#### 8.3.2 S2 bridge path (AS slower than gate — headline scenario)
+
+```mermaid
+sequenceDiagram
+  participant User
+  participant MAP as MAP_Client
+  participant GW as ChildSbb
+  participant Cache as VirtualSessionStore
+  participant AS as Application_Server
+  participant Push as HttpServerSbb
+  participant MSC as MSC_via_MAP
+
+  User->>MAP: USSD input turn
+  MAP->>GW: ProcessUnstructuredSSRequest S1
+  GW->>Cache: WAIT_AS correlationId requestId
+  GW->>AS: Pull MO with requestId
+  Note over GW: adaptive gate fires approx 7s
+  GW->>User: asyncWaitUserMessage via MAP
+  GW->>MAP: close MO dialogue S1
+  GW->>Cache: BRIDGED
+  GW->>GW: CDR S1 bridgePhase S1_RELEASED
+
+  alt Channel A sync gRPC or HTTP still connected
+    AS-->>GW: late menu same connection
+    GW->>Push: reconcileLateResponse SYNC
+  else Channel B HTTP callback
+    AS->>Push: POST restcomm X-Ussd-Request-Id
+    Push->>Cache: load by requestId
+  end
+
+  Push->>MSC: UnstructuredSSRequest S2 NI push
+  MSC->>User: final menu
+  Push->>Push: CDR S2 same correlationId
+```
+
+**gRPC note:** AS **must echo `requestId`** in the JSON envelope ([`ussd_envelope.py`](../tools/grpc-as-tester/ussd_envelope.py)). Channel A is handled in `GrpcClientSbb` when the MAP dialogue is already gone.
+
+**HTTP Pull note:** `http_as_server.py --bridge-delay 8000` delays the **same POST response** (Channel A). For Channel B, AS must POST to `http://127.0.0.1:8080/restcomm` with header `X-Ussd-Request-Id` (see RFC §5).
+
+### 8.4 Call flow — Push NI
+
+#### 8.4.1 Cold NI push (no prior MO)
+
+```mermaid
+sequenceDiagram
+  participant AS
+  participant GW as HttpServerSbb
+  participant MSC
+
+  AS->>GW: POST restcomm XmlMAPDialog no X-Ussd-Request-Id
+  GW->>GW: SRI optional SriSbb
+  GW->>MSC: UnstructuredSSNotify or Request
+  MSC->>AS: MAP responses via GW
+```
+
+#### 8.4.2 Bridge recovery push (S2 after slow Pull MO)
+
+Same servlet URL **`POST /restcomm`**, but AS includes **`X-Ussd-Request-Id`** matching the MO request. `HttpServerSbb` reconciles via `SessionBridgeSupport.reconcileLateResponse()` → NI push with **`correlationId` linked to S1 CDR**.
+
+### 8.5 Smoke scenarios (functional, low rate)
+
+Run after gateway healthy + AS up. Goal: prove bridge logic before high load.
+
+#### 8.5.1 gRPC Pull — single bridged dialog
+
+```bash
+# Terminal 1 — gateway + gRPC AS with forced bridge on every request
+cd ussdgateway/tools/grpc-as-tester
+./.venv/bin/python ussd_as_server.py \
+  --port 8443 --bridge-delay 8000 --bridge-every 1 \
+  --min-delay 1 --max-delay 50 --menu-config menu_config.json
+
+# Terminal 2 — one MAP smoke (package)
+cd ussdgw-test && ./scripts/06-run-map-smoke.sh
+```
+
+**Expect:** Handset shows `asyncWaitUserMessage`, then menu arrives via NI push; gateway log `Bridging slow AS` / `bridge_late_sync_grpc`; CDR lines with same `correlationId`, phases `S1_RELEASED` + `S2_PUSH`.
+
+#### 8.5.2 HTTP Pull — bridged MO (`*519#`)
+
+```bash
+# Terminal 1 — HTTP Pull AS
+cd ussdgateway/tools/http-simulator/loadtest
+python3 http_as_server.py --port 8049 --bridge-delay 8000 --bridge-every 1
+
+# Terminal 2
+cd ussdgw-test && ./scripts/09-start-http-as.sh
+./scripts/12-run-http-pull-smoke.sh
+```
+
+#### 8.5.3 Adaptive gate only (no intentional bridge)
 
 ```bash
 ./.venv/bin/python ussd_as_server.py --port 8443 --min-delay 1 --max-delay 100
+# MAP: profile ADAPTIVE, think 50–500 ms
+cd ussdgw-test/tools/jss7-map-load
+java -cp "lib/*" org.restcomm.protocols.ss7.map.load.ussd.Client \
+  50 10 sctp 127.0.0.1 8011 -1 127.0.0.1 8012 IPSP 101 102 1 2 3 2 8 6 8 \
+  1111112 9960639999 1 16 -100 0 "*100#" ADAPTIVE 50 500
 ```
 
-**MAP client:** profile `ADAPTIVE` or `RANDOM`, think delay `50–500` ms.
+**Expect:** All dialogs complete on S1 (no bridge); EWMA lowers effective gate for fast AS; `FailedScenario` ≈ 0 in `map-*.csv`.
 
-**Expected:** Gate adapts to AS latency; multi-turn dialogs still complete before `dialogtimeout` (25 s).
+### 8.6 High-load test matrix (adaptive timeout + bridge @ TPS)
 
-### 8.2 Bridge late-response
+**Prerequisites:** §4 lab up, `sessionbridgeenabled=true`, warmup **ON** (default), monitor `docker logs ussd-ng`, `map-*.csv`, CDR directory if enabled.
 
-**AS** deliberately slower than the gate:
+#### H1 — Adaptive gate saturation (no bridge triggers)
+
+**Goal:** Prove EWMA + 60 s dialog timeout hold at target TPS without mass early release.
+
+| Layer | Command |
+|-------|---------|
+| gRPC AS | `./.venv/bin/python ussd_as_server.py --port 8443 --workers 128 --min-delay 1 --max-delay 100` |
+| MAP load | `java -cp "lib/*" ... Client 100000 400 sctp ... "*100#" ADAPTIVE 50 300` with arg 24 = `5` (5 min) |
+| Or gRPC-only stress | `./.venv/bin/python loadtest_client.py --target localhost:8443 --tps 1000 --duration 300 --multi-menu --profile ADAPTIVE --think-min 50 --think-max 300` |
+
+**Pass criteria:**
+
+| Metric | Target |
+|--------|--------|
+| `CompletedScenario` / created | ≥ 95% |
+| `FailedScenario` | ≤ 2% |
+| Gateway `updateAppTimeouts` / hard `dialogtimeouterrmssg` | not spiking |
+| Bridge S1 CDR rate | ≈ 0 (no `--bridge-delay`) |
+| Achieved TPS (after 60 s warmup) | ≥ 80% of `--tps` / MAP target |
+
+#### H2 — Mixed bridge at 1000 TPS (headline production test)
+
+**Goal:** 10% of MO turns intentionally slower than gate; gateway must recover via S2 without collapsing MAP/TCAP.
+
+| Layer | Config |
+|-------|--------|
+| gRPC AS | `--bridge-delay 8000 --bridge-every 10 --min-delay 1 --max-delay 80 --workers 128` |
+| MAP load (full E2E) | `100000 400 ... "*100#" RANDOM 50 200` duration 5 min |
+| HTTP Pull variant | `http_as_server.py --bridge-delay 8000 --bridge-every 10` + MAP `*519#` same concurrency |
+
+**Pass criteria:**
+
+| Metric | Target |
+|--------|--------|
+| `CompletedScenario` + recovered S2 | ≥ 90% of created (count S1 timeout + S2 delivery) |
+| `FailedScenario` | ≤ 5% |
+| Log markers | `bridge_late_sync_grpc` or `bridge_late_sync_http`, `Bridging slow AS` |
+| CDR | Paired `S1_RELEASED` / `S2_PUSH` sharing `correlationId` for bridged subset |
+| User experience | `asyncWaitUserMessage` then menu within `bridgeStateTtlSec` |
+
+**Example — MAP full E2E @ mixed bridge (package):**
 
 ```bash
-./.venv/bin/python ussd_as_server.py \
-  --port 8443 --bridge-delay 8000 --bridge-every 1
+cd ussdgw-test/tools/jss7-map-load
+java -cp "lib/*" org.restcomm.protocols.ss7.map.load.ussd.Client \
+  100000 400 sctp 127.0.0.1 8011 -1 127.0.0.1 8012 IPSP 101 102 1 2 3 2 8 6 8 \
+  1111112 9960639999 1 16 -100 5 "*100#" RANDOM 50 200
 ```
 
-**Expected:**
+Warmup: MAP client prints `warmup 60s: 1 → … → 400 TPS` (capped by concurrent dialogs). Disable with `-Dwarmup=false` only for regression of instant overload.
 
-1. Gate (7 s) fires → MO release S1 (`asyncWaitUserMessage`)
-2. Late AS response → gateway reconciles via `requestId` → NI push S2
+#### H3 — HTTP Push 1000 TPS (NI path under load)
 
-Verify: gateway metrics/logs `bridge_late_*`, CDR S1 + S2. Spec: [`docs/design/bridge-unified-reconciliation-rfc.md`](design/bridge-unified-reconciliation-rfc.md).
+**Goal:** Servlet RA + `HttpServerSbb` stable while Pull MO bridging runs concurrently.
 
-### 8.3 Direct gRPC bridge test
+```bash
+# Terminal 1 — keep gRPC AS + MAP load from H2 running
+# Terminal 2 — HTTP Push load
+cd ussdgateway/tools/http-simulator/loadtest
+python3 http_push_loadtest.py \
+  --target http://127.0.0.1:8080/restcomm \
+  --mode multi --profile BALANCE \
+  --tps 1000 --duration 300 \
+  --think-min 50 --think-max 200 \
+  --max-inflight 2000
+```
 
-Use `loadtest_client.py --multi-menu` with AS `--bridge-delay 8000` — tests AS + `requestId` echo in the envelope; **does not** cover the MAP/SCTP path.
+**Pass criteria:** Push error rate ≤ 1%; gateway CPU stable; no `RejectedExecutionException` in logs; cold push latency p95 acceptable.
+
+#### H4 — gRPC direct load + bridge (AS regression, no MAP)
+
+Validates AS `requestId` echo and envelope at TPS without SCTP — **does not replace H2**.
+
+```bash
+./.venv/bin/python ussd_as_server.py --port 8443 --bridge-delay 8000 --bridge-every 5 --workers 128
+./.venv/bin/python loadtest_client.py \
+  --target localhost:8443 --tps 1000 --duration 120 \
+  --multi-menu --profile RANDOM --think-min 50 --think-max 200
+```
+
+#### H5 — Channel B manual callback (HTTP Pull bridge)
+
+After H2 smoke, verify **Push servlet** reconciliation:
+
+1. Run `./scripts/12-run-http-pull-smoke.sh` with `--bridge-delay 8000 --bridge-every 1`.
+2. From AS (or curl), POST late result to gateway:
+
+```bash
+curl -sS -X POST http://127.0.0.1:8080/restcomm \
+  -H "Content-Type: text/xml" \
+  -H "X-Ussd-Request-Id: <requestId from GW log>" \
+  --data-binary @/path/to/XmlMAPDialog-response.xml
+```
+
+**Expect:** `HttpServerSbb` log `bridge_late_push_http`; NI push to MSISDN; CDR S2.
+
+### 8.7 Monitoring & verification checklist
+
+| Signal | Where | Healthy pattern |
+|--------|-------|-----------------|
+| Adaptive gate | GW log / JMX | Gate ms trends down when AS fast, capped at 7000 |
+| Bridge S1 | `ChildSbb` log | `Bridging slow AS for PULL case correlationId=…` |
+| Late reconcile | GW log | `bridge_late_sync_*` or `bridge_late_push_http` |
+| MAP load CSV | `tools/jss7-map-load/map-*.csv` | `CompletedScenario` ↑, `FailedScenario` flat |
+| CDR | CDR file / dir | Same `correlationId`, phases `S1_RELEASED` + `S2_PUSH` |
+| TCAP | GW log | No mass `JENNY-DIALOG-TIMEOUT` before app gate |
+| Warmup | load tool stdout | First 60 s sub-target TPS, then plateau |
+
+### 8.8 Troubleshooting (bridge-specific)
+
+| Symptom | Likely cause | Fix |
+|---------|--------------|-----|
+| Hard `dialogtimeouterrmssg` under load | Bridge off or gate ≥ dialog timeout | Enable bridge; verify `asyncGateTimeoutMs` < `dialogtimeout` |
+| Bridge fires but no S2 menu | AS missing `requestId` echo / expired TTL | Fix AS envelope; increase `bridgeStateTtlSec`; check `bridge_late_expired` |
+| Mass `FailedScenario` at 1000 TPS | No warmup, AS pool too small | Default warmup ON; AS `--workers 128`; reduce `--bridge-every` |
+| S2 never arrives HTTP Pull | Channel B not implemented on AS | Use gRPC AS or POST `/restcomm` with `X-Ussd-Request-Id` |
+| Duplicate menus | Double reconcile | Check `bridge_late_duplicate` metric; AS must not retry same `requestId` |
 
 ---
 
@@ -654,10 +935,11 @@ Use `loadtest_client.py --multi-menu` with AS `--bridge-delay 8000` — tests AS
 | [`tools/http-simulator/loadtest/`](../tools/http-simulator/loadtest/) | HTTP Pull AS + Push load (auto XML) |
 | [`tools/grpc-as-tester/`](../tools/grpc-as-tester/) | gRPC AS server + load client source |
 | [`jSS7/map/load/USSD-LOADTEST.md`](../../jSS7/map/load/USSD-LOADTEST.md) | MAP load CLI reference |
+| [`docs/design/virtual-session-bridge.md`](design/virtual-session-bridge.md) | Virtual Session Bridge design + S2 sequence |
 | [`docs/design/bridge-unified-reconciliation-rfc.md`](design/bridge-unified-reconciliation-rfc.md) | Late-response reconciliation |
 | [`release-wildfly/DEPLOY-GUIDE.md`](../release-wildfly/DEPLOY-GUIDE.md) | Docker deploy + SCTP |
 | [`ussdgw-test/README.md`](../../ussdgw-test/README.md) | Offline production test package |
 
 ---
 
-*Last updated: 2026-06-22 — TPS warmup (default 60 s ramp), Docker context, SLEE/disruptor/MAP RA fixes, hostname, MAP lib/* classpath, Woodstox.*
+*Last updated: 2026-06-22 — §8 adaptive timeout/bridge high-load matrix, TPS warmup, Docker context, SLEE fixes.*

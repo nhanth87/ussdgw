@@ -10,7 +10,7 @@
 
 	<groupId>org.mobicents.ussd</groupId>
 	<artifactId>parent</artifactId>
-	<version>7.2.1-SNAPSHOT</version>
+	<version>7.3.0-SNAPSHOT</version>
 
 	<name>USSD Gateway Parent</name>
 
@@ -49,12 +49,12 @@
 		<restcomm.resources.http-client.version>7.0.0</restcomm.resources.http-client.version>
 		<restcomm.resources.http-servlet.version>7.0.0</restcomm.resources.http-servlet.version>
 		<restcomm.core.ext.version>2.8.10</restcomm.core.ext.version>
-		<restcomm.resources.map.version>9.2.12</restcomm.resources.map.version>
+		<restcomm.resources.map.version>9.5.0</restcomm.resources.map.version>
 		<restcomm.resources.jdbc.version>7.2.0-113</restcomm.resources.jdbc.version> <!-- Old: 2.8.7, Wildly: 7.2.0-113 2.9.0-SNAPSHOT,2.10.0-111 -->
 
 
 		<!-- UPDATED: Bumped to match jSS7/jain-slee.ss7 versions -->
-		<jss7.restcomm.version>9.2.12</jss7.restcomm.version>
+		<jss7.restcomm.version>9.5.0</jss7.restcomm.version>
 		<!-- commercial libs --> 
 		<!-- <jss7.restcomm.version>8.0.0-140</jss7.restcomm.version> -->
 

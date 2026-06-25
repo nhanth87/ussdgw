@@ -4,7 +4,7 @@
 	<parent>
 		<groupId>org.mobicents.ussd.examples</groupId>
 		<artifactId>parent</artifactId>
-		<version>7.2.1-SNAPSHOT</version>
+		<version>7.3.0-SNAPSHOT</version>
 	</parent>
 
 	<artifactId>http-example</artifactId>
@@ -149,7 +149,9 @@ public class StripModuleInfo {
                 while ((entry = zis.getNextEntry()) != null) {
                     String name = entry.getName();
                     if (name.equals("module-info.class") || name.contains("/module-info.class")) continue;
-                    zos.putNextEntry(entry);
+                    ZipEntry outEntry = new ZipEntry(name);
+                    outEntry.setTime(entry.getTime());
+                    zos.putNextEntry(outEntry);
                     byte[] buf = new byte[4096];
                     int read;
                     while ((read = zis.read(buf)) != -1) zos.write(buf, 0, read);

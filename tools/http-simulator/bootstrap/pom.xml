@@ -6,7 +6,7 @@
 	<parent>
 		<artifactId>http-simulator-parent</artifactId>
 		<groupId>org.mobicents.ussd</groupId>
-		<version>7.2.1-SNAPSHOT</version>
+		<version>7.3.0-SNAPSHOT</version>
 	</parent>
 
 	<artifactId>simulator-bootstrap</artifactId>

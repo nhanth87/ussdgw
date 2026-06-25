@@ -42,7 +42,11 @@ RUN chmod +x /opt/restcomm/docker-entrypoint.sh /opt/restcomm/scripts/*.sh \
 EXPOSE 8080 8443 9990 9993 8009 2905 2906 8011 8012
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=300s --retries=10 \
-    CMD curl -fs http://localhost:9990/health || exit 1
+    CMD curl -fsS http://127.0.0.1:8080/jolokia/version \
+    || (curl -fsS -u admin:admin -H "Content-Type: application/json" \
+        -d '{"operation":"read-attribute","address":[],"name":"server-state"}' \
+        http://127.0.0.1:9990/management | grep -q running) \
+    || exit 1
 
 ENTRYPOINT ["/opt/restcomm/docker-entrypoint.sh"]
 CMD ["-b", "0.0.0.0", "-bmanagement", "0.0.0.0"]
