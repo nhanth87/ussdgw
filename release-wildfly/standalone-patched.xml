@@ -191,6 +191,17 @@
                     <expiration lifespan="180000"/>
                 </local-cache>
             </cache-container>
+            <!-- jSS7 distributed protocol timers. JNDI: java:jboss/infinispan/container/jss7 -->
+            <cache-container name="jss7" default-cache="jss7-timers" module="org.wildfly.clustering.server">
+                <local-cache name="jss7-timers">
+                    <locking isolation="READ_COMMITTED"/>
+                    <expiration max-idle="-1" lifespan="-1" interval="1000"/>
+                </local-cache>
+                <local-cache name="jss7-timer-index">
+                    <locking isolation="READ_COMMITTED"/>
+                    <expiration max-idle="3600000" interval="60000"/>
+                </local-cache>
+            </cache-container>
             <cache-container name="web" default-cache="passivation" module="org.wildfly.clustering.web.infinispan">
                 <local-cache name="passivation">
                     <locking isolation="REPEATABLE_READ"/>
