@@ -34,6 +34,8 @@ public enum ReconcileChannel {
     SYNC_SIP,
     /** AS posted to the existing USSD push servlet carrying the request id. */
     PUSH_HTTP,
+    /** AS invoked the gateway gRPC push server carrying the request id. */
+    PUSH_GRPC,
     /** AS sent a SIP INVITE push carrying the request id. */
     PUSH_SIP;
 
@@ -42,6 +44,6 @@ public enum ReconcileChannel {
     }
 
     public boolean isPush() {
-        return this == PUSH_HTTP || this == PUSH_SIP;
+        return this == PUSH_HTTP || this == PUSH_GRPC || this == PUSH_SIP;
     }
 }

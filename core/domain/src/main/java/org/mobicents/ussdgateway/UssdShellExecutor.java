@@ -368,6 +368,15 @@ public class UssdShellExecutor implements ShellExecutor {
             String cdrSeparator = options[3];
             ussdPropertiesManagement.setCdrSeparator(cdrSeparator);
 
+        } else if (parName.equals(UssdPropertiesManagement.GRPC_PUSH_SERVER_ENABLED)) {
+            ussdPropertiesManagement.setGrpcPushServerEnabled(Boolean.parseBoolean(options[3]));
+        } else if (parName.equals(UssdPropertiesManagement.GRPC_PUSH_SERVER_PORT)) {
+            ussdPropertiesManagement.setGrpcPushServerPort(Integer.parseInt(options[3]));
+        } else if (parName.equals(UssdPropertiesManagement.GRPC_PUSH_WORKER_THREADS)) {
+            ussdPropertiesManagement.setGrpcPushWorkerThreads(Integer.parseInt(options[3]));
+        } else if (parName.equals(UssdPropertiesManagement.GRPC_PUSH_MAX_CONCURRENT)) {
+            ussdPropertiesManagement.setGrpcPushMaxConcurrentCalls(Integer.parseInt(options[3]));
+
         } else {
 			return UssdOAMMessages.INVALID_COMMAND;
 		}
@@ -428,6 +437,15 @@ public class UssdShellExecutor implements ShellExecutor {
                 sb.append(ussdPropertiesManagement.getCdrLoggingTo());
             } else if (parName.equals("cdrseparator")) {
                 sb.append(ussdPropertiesManagement.getCdrSeparator());
+
+            } else if (parName.equals(UssdPropertiesManagement.GRPC_PUSH_SERVER_ENABLED)) {
+                sb.append(ussdPropertiesManagement.isGrpcPushServerEnabled());
+            } else if (parName.equals(UssdPropertiesManagement.GRPC_PUSH_SERVER_PORT)) {
+                sb.append(ussdPropertiesManagement.getGrpcPushServerPort());
+            } else if (parName.equals(UssdPropertiesManagement.GRPC_PUSH_WORKER_THREADS)) {
+                sb.append(ussdPropertiesManagement.getGrpcPushWorkerThreads());
+            } else if (parName.equals(UssdPropertiesManagement.GRPC_PUSH_MAX_CONCURRENT)) {
+                sb.append(ussdPropertiesManagement.getGrpcPushMaxConcurrentCalls());
 
             } else {
 				return UssdOAMMessages.INVALID_COMMAND;

@@ -27,6 +27,7 @@
 
     <modules>
         <module>library</module>
+        <module>events</module>
         <module>ratype</module>
         <module>ra</module>
         <module>du</module>

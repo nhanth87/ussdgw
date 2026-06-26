@@ -121,4 +121,22 @@ public interface UssdPropertiesManagementMBean {
 
     public void setPushRetryDelaysMs(String pushRetryDelaysMs);
 
+    // ----- gRPC push ingress server (gateway as gRPC server) -----
+
+    public boolean isGrpcPushServerEnabled();
+
+    public void setGrpcPushServerEnabled(boolean grpcPushServerEnabled);
+
+    public int getGrpcPushServerPort();
+
+    public void setGrpcPushServerPort(int grpcPushServerPort);
+
+    public int getGrpcPushWorkerThreads();
+
+    public void setGrpcPushWorkerThreads(int grpcPushWorkerThreads);
+
+    public int getGrpcPushMaxConcurrentCalls();
+
+    public void setGrpcPushMaxConcurrentCalls(int grpcPushMaxConcurrentCalls);
+
 }
