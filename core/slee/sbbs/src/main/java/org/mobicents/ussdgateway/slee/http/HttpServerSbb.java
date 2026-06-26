@@ -250,7 +250,7 @@ public abstract class HttpServerSbb extends ChildServerSbb implements SriParent 
 						bridgeCorrelationId = rr.getSession().getCorrelationId();
 					} else {
 						// DUPLICATE / UNKNOWN / EXPIRED / ABORTED / STALE / QUEUED: ack, no push.
-						ackHttpCallback();
+						ackPushCallback();
 						success = true;
 						return;
 					}
@@ -1182,7 +1182,7 @@ public abstract class HttpServerSbb extends ChildServerSbb implements SriParent 
         }
 
         sendHttpResponse();
-        this.endHttpSessionActivity();
+        this.endPushIngress();
     }
 
 	/**
@@ -1225,26 +1225,30 @@ public abstract class HttpServerSbb extends ChildServerSbb implements SriParent 
 
     private void sendHttpResponse() {
         try {
-            if (super.logger.isFineEnabled())
-                super.logger.fine("About to send HTTP response.");
-
             XmlMAPDialog dialog = getXmlMAPDialog();
-            byte[] data;
-            try {
-                data = getEventsSerializeFactory().serialize(dialog);
-            } catch (Exception e) {
-                throw new IOException("Failed to serialize dialog", e);
-            }
+            byte[] data = getEventsSerializeFactory().serialize(dialog);
+            deliverPushResponse(data);
+        } catch (Exception e) {
+            super.logger.severe("Failed to send push ingress response!", e);
+        }
+    }
 
-            if (super.logger.isFineEnabled()) {
-                super.logger.fine("Sending HTTP Response Payload = \n" + new String(data));
+    /**
+     * Deliver serialized XmlMAPDialog back to the push ingress transport (HTTP or gRPC).
+     */
+    protected void deliverPushResponse(byte[] data) {
+        try {
+            if (super.logger.isFineEnabled())
+                super.logger.fine("About to send push ingress response.");
+
+            if (super.logger.isFineEnabled() && data != null) {
+                super.logger.fine("Sending push ingress payload = \n" + new String(data));
             }
 
             EventContext httpEventContext = this.resumeHttpEventContext();
 
             if (httpEventContext == null) {
-                // TODO: terminate dialog?
-                logger.severe("No HTTP event context, can not deliver response for MapXmlDialog: " + dialog);
+                logger.severe("No HTTP event context, can not deliver response");
                 return;
             }
 
@@ -1264,7 +1268,10 @@ public abstract class HttpServerSbb extends ChildServerSbb implements SriParent 
         } catch (IOException e) {
             super.logger.severe("Failed to send answer!", e);
         }
+    }
 
+    protected void endPushIngress() {
+        endHttpSessionActivity();
     }
 
     private void endHttpSessionActivity() {
@@ -1286,8 +1293,8 @@ public abstract class HttpServerSbb extends ChildServerSbb implements SriParent 
         return org.mobicents.ussdgateway.bridge.BridgeReconciler.NO_GENERATION;
     }
 
-    /** Acknowledge a late AS response (duplicate / queued / aborted / stale) with HTTP 200, no push. */
-    private void ackHttpCallback() {
+    /** Acknowledge a late AS response (duplicate / queued / aborted / stale), no NI push. */
+    protected void ackPushCallback() {
         EventContext httpEventContext = this.resumeHttpEventContext();
         if (httpEventContext != null) {
             HttpServletRequestEvent httpRequest = (HttpServletRequestEvent) httpEventContext.getEvent();
@@ -1299,6 +1306,25 @@ public abstract class HttpServerSbb extends ChildServerSbb implements SriParent 
                 logger.severe("Failed to flush HTTP callback ack", ioe);
             }
         }
+    }
+
+    protected void signalPushIngressOk() {
+        EventContext httpEventContext = this.resumeHttpEventContext();
+        if (httpEventContext != null) {
+            HttpServletRequestEvent httpRequest = (HttpServletRequestEvent) httpEventContext.getEvent();
+            HttpServletResponse response = httpRequest.getResponse();
+            response.setStatus(HttpServletResponse.SC_OK);
+        }
+    }
+
+    protected XmlMAPDialog deserializePushPayload(byte[] rawBytes) throws Exception {
+        if (rawBytes == null || rawBytes.length == 0) {
+            throw new IOException("Empty push payload");
+        }
+        if (logger.isInfoEnabled()) {
+            logger.info("deserializePushPayload: raw XML length=" + rawBytes.length);
+        }
+        return getEventsSerializeFactory().deserialize(rawBytes);
     }
 
     private HttpSessionActivity getHttpSessionActivity() {
@@ -1333,13 +1359,8 @@ public abstract class HttpServerSbb extends ChildServerSbb implements SriParent 
         MAPUserAbortChoice capUserAbortReason = xmlMAPDialog.getMAPUserAbortChoice();
         if (capUserAbortReason != null) {
             dialog.abort(capUserAbortReason);
-            EventContext httpEventContext = this.resumeHttpEventContext();
-            if (httpEventContext != null) {
-                HttpServletRequestEvent httpRequest = (HttpServletRequestEvent) httpEventContext.getEvent();
-                HttpServletResponse response = httpRequest.getResponse();
-                response.setStatus(HttpServletResponse.SC_OK);
-            }
-            this.endHttpSessionActivity();
+            signalPushIngressOk();
+            this.endPushIngress();
             return;
         }
 
@@ -1349,16 +1370,8 @@ public abstract class HttpServerSbb extends ChildServerSbb implements SriParent 
 
         if (prearrangedEnd != null) {
             dialog.close(prearrangedEnd);
-
-            // If prearrangedEnd is not null means, no more MAP messages are
-            // expected. Lets clear HTTP resources
-            EventContext httpEventContext = this.resumeHttpEventContext();
-            if (httpEventContext != null) {
-                HttpServletRequestEvent httpRequest = (HttpServletRequestEvent) httpEventContext.getEvent();
-                HttpServletResponse response = httpRequest.getResponse();
-                response.setStatus(HttpServletResponse.SC_OK);
-            }
-            this.endHttpSessionActivity();
+            signalPushIngressOk();
+            this.endPushIngress();
         } else {
             dialog.send();
         }
@@ -1375,8 +1388,7 @@ public abstract class HttpServerSbb extends ChildServerSbb implements SriParent 
         sendHttpResponse();
 
         if (messageType == MessageType.End) {
-            // If MAP Dialog is end, lets kill HTTP Session Activity too
-            this.endHttpSessionActivity();
+            this.endPushIngress();
         }
     }
 

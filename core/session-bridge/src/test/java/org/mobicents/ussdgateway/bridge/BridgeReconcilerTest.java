@@ -198,4 +198,76 @@ public class BridgeReconcilerTest {
         assertEquals(delivered.get(), 1, "exactly one channel may deliver (no double charge)");
         assertEquals(duplicate.get(), threads - 1);
     }
+
+    @Test
+    public void deliveredOnFirstLateResponseViaPushGrpc() {
+        bridged("grpc1", "rg1");
+        long before = BridgeMetrics.getInstance().getLatePushGrpc();
+        ReconcileResult r = reconciler.reconcileLateResponse("rg1", MENU, ReconcileChannel.PUSH_GRPC,
+                BridgeReconciler.NO_GENERATION);
+        assertEquals(r.getOutcome(), Outcome.DELIVERED);
+        assertTrue(r.shouldPush());
+        assertEquals(BridgeMetrics.getInstance().getLatePushGrpc(), before + 1);
+    }
+
+    @Test
+    public void duplicatePushGrpcDropped() {
+        bridged("grpc2", "rg2");
+        reconciler.reconcileLateResponse("rg2", MENU, ReconcileChannel.PUSH_GRPC,
+                BridgeReconciler.NO_GENERATION);
+        ReconcileResult dup = reconciler.reconcileLateResponse("rg2", MENU, ReconcileChannel.PUSH_GRPC,
+                BridgeReconciler.NO_GENERATION);
+        assertEquals(dup.getOutcome(), Outcome.DUPLICATE);
+        assertTrue(!dup.shouldPush());
+    }
+
+    @Test
+    public void unknownRequestIdViaPushGrpcYieldsExpired() {
+        ReconcileResult r = reconciler.reconcileLateResponse("ghost-grpc", MENU, ReconcileChannel.PUSH_GRPC,
+                BridgeReconciler.NO_GENERATION);
+        assertEquals(r.getOutcome(), Outcome.EXPIRED);
+    }
+
+    @Test
+    public void concurrentSyncGrpcAndPushGrpcDeliverExactlyOnce() throws Exception {
+        bridged("grpcRace", "rGR");
+        final int threads = 16;
+        final ExecutorService pool = Executors.newFixedThreadPool(threads);
+        final CountDownLatch start = new CountDownLatch(1);
+        final AtomicInteger delivered = new AtomicInteger();
+        final AtomicInteger duplicate = new AtomicInteger();
+        try {
+            for (int i = 0; i < threads; i++) {
+                final ReconcileChannel ch = (i % 2 == 0) ? ReconcileChannel.SYNC_GRPC
+                        : ReconcileChannel.PUSH_GRPC;
+                pool.submit(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            start.await();
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            return;
+                        }
+                        ReconcileResult r = reconciler.reconcileLateResponse("rGR", MENU, ch,
+                                BridgeReconciler.NO_GENERATION);
+                        if (r.getOutcome() == Outcome.DELIVERED) {
+                            delivered.incrementAndGet();
+                        } else if (r.getOutcome() == Outcome.DUPLICATE) {
+                            duplicate.incrementAndGet();
+                        }
+                    }
+                });
+            }
+            start.countDown();
+            pool.shutdown();
+            assertTrue(pool.awaitTermination(10, TimeUnit.SECONDS));
+        } finally {
+            pool.shutdownNow();
+        }
+        assertEquals(delivered.get(), 1);
+        assertEquals(duplicate.get(), threads - 1);
+        assertTrue(BridgeMetrics.getInstance().getLatePushGrpc()
+                + BridgeMetrics.getInstance().getLateSyncGrpc() >= 1);
+    }
 }

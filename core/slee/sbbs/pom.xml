@@ -60,6 +60,11 @@
        	    <artifactId>ussd-grpc-as-ra-library</artifactId>
        	    <version>${project.version}</version>
        	</dependency>
+       	<dependency>
+       	    <groupId>${project.groupId}</groupId>
+       	    <artifactId>ussd-grpc-as-ra-events</artifactId>
+       	    <version>${project.version}</version>
+       	</dependency>
         <dependency>
             <groupId>org.mobicents.resources</groupId>
             <artifactId>sip11-ratype</artifactId>

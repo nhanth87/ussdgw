@@ -24,6 +24,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 import javax.slee.Address;
+import javax.slee.EventTypeID;
+import javax.slee.facilities.EventLookupFacility;
 import javax.slee.facilities.Tracer;
 import javax.slee.resource.ActivityHandle;
 import javax.slee.resource.ConfigProperties;
@@ -34,11 +36,16 @@ import javax.slee.resource.Marshaler;
 import javax.slee.resource.ReceivableService;
 import javax.slee.resource.ResourceAdaptor;
 import javax.slee.resource.ResourceAdaptorContext;
+import javax.slee.resource.SleeEndpoint;
 
 import org.mobicents.ussd.grpc.GrpcEnvelopeCodec;
 import org.mobicents.ussd.grpc.GrpcRequest;
 import org.mobicents.ussd.grpc.GrpcResponse;
 import org.mobicents.ussd.grpc.GrpcResponseRegistry;
+import org.mobicents.ussd.grpc.ra.push.GrpcPushActivityImpl;
+import org.mobicents.ussd.grpc.ra.push.GrpcPushServer;
+import org.mobicents.ussdgateway.GrpcPushServerController;
+import org.mobicents.ussdgateway.UssdPropertiesManagement;
 
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
@@ -55,11 +62,11 @@ import io.grpc.stub.StreamObserver;
  * runs on the gRPC executor. The reply is deposited in {@link GrpcResponseRegistry} keyed by
  * correlation id, where the SBB collects it via a short SLEE poll timer.
  */
-public class GrpcAsResourceAdaptor implements ResourceAdaptor {
+public class GrpcAsResourceAdaptor implements ResourceAdaptor, GrpcPushServerController {
 
     private static final String GRPC_DEADLINE_MS_PROPERTY = "GRPC_DEADLINE_MS";
 
-    static final MethodDescriptor<byte[], byte[]> PROCESS_METHOD = MethodDescriptor.<byte[], byte[]>newBuilder()
+    public static final MethodDescriptor<byte[], byte[]> PROCESS_METHOD = MethodDescriptor.<byte[], byte[]>newBuilder()
             .setType(MethodDescriptor.MethodType.UNARY)
             .setFullMethodName(MethodDescriptor.generateFullMethodName("ussd.UssdApplicationService", "Process"))
             .setRequestMarshaller(ByteArrayMarshaller.INSTANCE)
@@ -68,11 +75,16 @@ public class GrpcAsResourceAdaptor implements ResourceAdaptor {
 
     private ResourceAdaptorContext context;
     private Tracer tracer;
+    private SleeEndpoint sleeEndpoint;
+    private FireableEventType pushEventType;
     private long deadlineMs = 30000;
 
     private final GrpcAsResourceAdaptorSbbInterfaceImpl sbbInterface = new GrpcAsResourceAdaptorSbbInterfaceImpl(this);
     private final GrpcResponseRegistry registry = GrpcResponseRegistry.getInstance();
     private final ConcurrentHashMap<String, ManagedChannel> channels = new ConcurrentHashMap<String, ManagedChannel>();
+    private final ConcurrentHashMap<String, GrpcPushActivityImpl> pushActivities = new ConcurrentHashMap<String, GrpcPushActivityImpl>();
+
+    private volatile GrpcPushServer pushServer;
 
     /**
      * Non-blocking gRPC unary call. Result is published to {@link GrpcResponseRegistry}.
@@ -138,6 +150,54 @@ public class GrpcAsResourceAdaptor implements ResourceAdaptor {
         }
     }
 
+    public void registerPushActivity(GrpcPushActivityImpl activity) {
+        if (activity != null && activity.getId() != null) {
+            pushActivities.put(activity.getId(), activity);
+        }
+    }
+
+    void unregisterPushActivity(GrpcPushActivityImpl activity) {
+        if (activity != null && activity.getId() != null) {
+            pushActivities.remove(activity.getId());
+        }
+    }
+
+    @Override
+    public void applyGrpcPushConfig(boolean enabled, int port, int workerThreads, int maxConcurrentCalls) {
+        if (context == null || sleeEndpoint == null || pushEventType == null) {
+            return;
+        }
+        try {
+            if (enabled) {
+                if (pushServer == null) {
+                    pushServer = new GrpcPushServer(this, tracer, sleeEndpoint, pushEventType, workerThreads);
+                }
+                pushServer.start(port, maxConcurrentCalls);
+            } else {
+                stopPushServer();
+            }
+        } catch (Throwable t) {
+            if (tracer != null) {
+                tracer.severe("Failed to apply gRPC push server config", t);
+            }
+        }
+    }
+
+    private void stopPushServer() {
+        if (pushServer != null) {
+            pushServer.stop();
+        }
+    }
+
+    private void startPushServerFromProperties() {
+        UssdPropertiesManagement props = UssdPropertiesManagement.getInstance();
+        if (props == null) {
+            return;
+        }
+        applyGrpcPushConfig(props.isGrpcPushServerEnabled(), props.getGrpcPushServerPort(),
+                props.getGrpcPushWorkerThreads(), props.getGrpcPushMaxConcurrentCalls());
+    }
+
     // -------------------------------------------------------------
     // ResourceAdaptor SPI
     // -------------------------------------------------------------
@@ -156,12 +216,22 @@ public class GrpcAsResourceAdaptor implements ResourceAdaptor {
     public void setResourceAdaptorContext(ResourceAdaptorContext context) {
         this.context = context;
         this.tracer = context.getTracer(GrpcAsResourceAdaptor.class.getSimpleName());
+        this.sleeEndpoint = context.getSleeEndpoint();
+        try {
+            EventLookupFacility lookup = context.getEventLookupFacility();
+            this.pushEventType = lookup.getFireableEventType(new EventTypeID(GrpcPushServer.EVENT_TYPE_NAME,
+                    GrpcPushServer.EVENT_VENDOR, GrpcPushServer.EVENT_VERSION));
+        } catch (Throwable t) {
+            throw new RuntimeException("Could not resolve gRPC push event type", t);
+        }
     }
 
     @Override
     public void unsetResourceAdaptorContext() {
         this.context = null;
         this.tracer = null;
+        this.sleeEndpoint = null;
+        this.pushEventType = null;
     }
 
     @Override
@@ -175,10 +245,16 @@ public class GrpcAsResourceAdaptor implements ResourceAdaptor {
     @Override
     public void raActive() {
         tracer.info("gRPC AS RA active, deadlineMs=" + deadlineMs);
+        UssdPropertiesManagement.setGrpcPushServerController(this);
+        startPushServerFromProperties();
     }
 
     @Override
     public void raInactive() {
+        UssdPropertiesManagement.setGrpcPushServerController(null);
+        stopPushServer();
+        pushServer = null;
+        pushActivities.clear();
         for (ManagedChannel ch : channels.values()) {
             try {
                 ch.shutdownNow();
@@ -221,20 +297,35 @@ public class GrpcAsResourceAdaptor implements ResourceAdaptor {
 
     @Override
     public Object getActivity(ActivityHandle handle) {
+        if (handle instanceof GrpcPushActivityImpl) {
+            return handle;
+        }
+        if (handle != null) {
+            return pushActivities.get(handle.toString());
+        }
         return null;
     }
 
     @Override
     public ActivityHandle getActivityHandle(Object activityObject) {
+        if (activityObject instanceof GrpcPushActivityImpl) {
+            return (ActivityHandle) activityObject;
+        }
         return null;
     }
 
     @Override
     public void administrativeRemove(ActivityHandle handle) {
+        if (handle instanceof GrpcPushActivityImpl) {
+            unregisterPushActivity((GrpcPushActivityImpl) handle);
+        }
     }
 
     @Override
     public void activityEnded(ActivityHandle handle) {
+        if (handle instanceof GrpcPushActivityImpl) {
+            unregisterPushActivity((GrpcPushActivityImpl) handle);
+        }
     }
 
     @Override

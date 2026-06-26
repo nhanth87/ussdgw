@@ -102,9 +102,49 @@ def build_response(message_type: str, text: str, invoke_id: int, end: bool,
     return "".join(parts).encode("utf-8")
 
 
-def build_push_request(text: str, invoke_id: int, network_id: int = 0,
+def build_push_request(text: str, msisdn: str, invoke_id: int = 1, network_id: int = 0,
+                       user_object: str = None, empty_handshake: bool = False) -> bytes:
+    """NI push: unstructuredSSRequest_Request with subscriber MSISDN."""
+    extra = ' emptyDialogHandshake="true"' if empty_handshake else ""
+    msg = (
+        '<unstructuredSSRequest_Request invokeId="%d" dataCodingScheme="15" string="%s">'
+        '<msisdn nai="international_number" npi="ISDN" number="%s"/>'
+        "</unstructuredSSRequest_Request>"
+        % (invoke_id, _esc(text), _esc(msisdn))
+    )
+    head = (
+        '<?xml version="1.0" encoding="UTF-8" ?>'
+        '<dialog mapMessagesSize="1" networkId="%d"%s>' % (network_id, extra)
+    )
+    if user_object:
+        head = head.replace(">", ' userObject="%s">' % _esc(user_object), 1)
+    return (head + msg + "</dialog>").encode("utf-8")
+
+
+def build_push_notify(text: str, msisdn: str, network_id: int = 0) -> bytes:
+    msg = (
+        '<unstructuredSSNotify_Request dataCodingScheme="15" string="%s">'
+        '<msisdn nai="international_number" npi="ISDN" number="%s"/>'
+        "</unstructuredSSNotify_Request>"
+        % (_esc(text), _esc(msisdn))
+    )
+    head = (
+        '<?xml version="1.0" encoding="UTF-8" ?>'
+        '<dialog mapMessagesSize="1" networkId="%d">' % network_id
+    )
+    return (head + msg + "</dialog>").encode("utf-8")
+
+
+def build_dialog_end() -> bytes:
+    return (
+        '<?xml version="1.0" encoding="UTF-8" ?>'
+        '<dialog type="End" mapMessagesSize="0" prearrangedEnd="false"></dialog>'
+    ).encode("utf-8")
+
+
+def build_push_request_legacy(text: str, invoke_id: int, network_id: int = 0,
                        user_object: str = None) -> bytes:
-    """Build a Network-Initiated push (Begin + unstructuredSSRequest_Request)."""
+    """Legacy push without MSISDN (do not use against production GW)."""
     msg = (
         '<unstructuredSSRequest_Request invokeId="%d" dataCodingScheme="15">'
         "<string>%s</string></unstructuredSSRequest_Request>" % (invoke_id, _esc(text))

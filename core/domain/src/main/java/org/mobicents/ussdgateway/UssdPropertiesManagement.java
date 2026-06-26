@@ -69,7 +69,14 @@ public class UssdPropertiesManagement implements UssdPropertiesManagementMBean {
     protected static final String BRIDGE_STATE_TTL_SEC = "bridgestatettlsec";
     protected static final String PUSH_RETRY_DELAYS_MS = "pushretrydelaysms";
 
+    protected static final String GRPC_PUSH_SERVER_ENABLED = "grpcpushserverenabled";
+    protected static final String GRPC_PUSH_SERVER_PORT = "grpcpushserverport";
+    protected static final String GRPC_PUSH_WORKER_THREADS = "grpcpushworkerthreads";
+    protected static final String GRPC_PUSH_MAX_CONCURRENT = "grpcpushmaxconcurrent";
+
     private static final String PERSIST_FILE_NAME = "ussdproperties.xml";
+
+    private static volatile GrpcPushServerController grpcPushServerController;
 
     private static UssdPropertiesManagement instance;
 
@@ -123,6 +130,15 @@ public class UssdPropertiesManagement implements UssdPropertiesManagementMBean {
     private int bridgeStateTtlSec = 180;
     /** Comma-separated push retry back-off in milliseconds. */
     private String pushRetryDelaysMs = "3000,8000,15000";
+
+    /** Gateway listens for NI push over gRPC (AS is client). */
+    private boolean grpcPushServerEnabled = false;
+    /** TCP port for {@code ussd.UssdApplicationService/Process} push ingress. */
+    private int grpcPushServerPort = 8453;
+    /** Netty worker threads; 0 = auto (CPU * 4, min 8). */
+    private int grpcPushWorkerThreads = 0;
+    /** Max concurrent unary RPCs per connection (10k TPS target). */
+    private int grpcPushMaxConcurrentCalls = 10000;
 
     private UssdPropertiesManagement(String name) {
         this.name = name;
@@ -413,6 +429,66 @@ public class UssdPropertiesManagement implements UssdPropertiesManagementMBean {
         this.store();
     }
 
+    public static void setGrpcPushServerController(GrpcPushServerController controller) {
+        grpcPushServerController = controller;
+    }
+
+    @Override
+    public boolean isGrpcPushServerEnabled() {
+        return grpcPushServerEnabled;
+    }
+
+    @Override
+    public void setGrpcPushServerEnabled(boolean grpcPushServerEnabled) {
+        this.grpcPushServerEnabled = grpcPushServerEnabled;
+        this.store();
+        notifyGrpcPushServer();
+    }
+
+    @Override
+    public int getGrpcPushServerPort() {
+        return grpcPushServerPort;
+    }
+
+    @Override
+    public void setGrpcPushServerPort(int grpcPushServerPort) {
+        this.grpcPushServerPort = grpcPushServerPort;
+        this.store();
+        notifyGrpcPushServer();
+    }
+
+    @Override
+    public int getGrpcPushWorkerThreads() {
+        return grpcPushWorkerThreads;
+    }
+
+    @Override
+    public void setGrpcPushWorkerThreads(int grpcPushWorkerThreads) {
+        this.grpcPushWorkerThreads = grpcPushWorkerThreads;
+        this.store();
+        notifyGrpcPushServer();
+    }
+
+    @Override
+    public int getGrpcPushMaxConcurrentCalls() {
+        return grpcPushMaxConcurrentCalls;
+    }
+
+    @Override
+    public void setGrpcPushMaxConcurrentCalls(int grpcPushMaxConcurrentCalls) {
+        this.grpcPushMaxConcurrentCalls = grpcPushMaxConcurrentCalls;
+        this.store();
+        notifyGrpcPushServer();
+    }
+
+    private void notifyGrpcPushServer() {
+        GrpcPushServerController controller = grpcPushServerController;
+        if (controller != null) {
+            controller.applyGrpcPushConfig(grpcPushServerEnabled, grpcPushServerPort, grpcPushWorkerThreads,
+                    grpcPushMaxConcurrentCalls);
+        }
+    }
+
     /**
      * Parses {@link #pushRetryDelaysMs} into a {@code long[]} of back-off delays. Falls back to
      * {@code 3000,8000,15000} if the configured value is missing or malformed.
@@ -499,6 +575,10 @@ public class UssdPropertiesManagement implements UssdPropertiesManagementMBean {
             properties.put(ASYNC_HARD_FAIL_MESSAGE, this.asyncHardFailMessage);
             properties.put(BRIDGE_STATE_TTL_SEC, this.bridgeStateTtlSec);
             properties.put(PUSH_RETRY_DELAYS_MS, this.pushRetryDelaysMs);
+            properties.put(GRPC_PUSH_SERVER_ENABLED, this.grpcPushServerEnabled);
+            properties.put(GRPC_PUSH_SERVER_PORT, this.grpcPushServerPort);
+            properties.put(GRPC_PUSH_WORKER_THREADS, this.grpcPushWorkerThreads);
+            properties.put(GRPC_PUSH_MAX_CONCURRENT, this.grpcPushMaxConcurrentCalls);
 
             if (networkIdVsUssdGwGt.size() > 0) {
                 ArrayList<UssdGwGtNetworkIdElement> al = new ArrayList<>();
@@ -632,6 +712,23 @@ public class UssdPropertiesManagement implements UssdPropertiesManagementMBean {
                 o = properties.get(PUSH_RETRY_DELAYS_MS);
                 if (o != null)
                     this.pushRetryDelaysMs = o.toString();
+
+                o = properties.get(GRPC_PUSH_SERVER_ENABLED);
+                if (o != null)
+                    this.grpcPushServerEnabled = (o instanceof Boolean) ? (Boolean) o : Boolean.parseBoolean(o.toString());
+
+                o = properties.get(GRPC_PUSH_SERVER_PORT);
+                if (o != null)
+                    this.grpcPushServerPort = (o instanceof Number) ? ((Number) o).intValue() : Integer.parseInt(o.toString());
+
+                o = properties.get(GRPC_PUSH_WORKER_THREADS);
+                if (o != null)
+                    this.grpcPushWorkerThreads = (o instanceof Number) ? ((Number) o).intValue() : Integer.parseInt(o.toString());
+
+                o = properties.get(GRPC_PUSH_MAX_CONCURRENT);
+                if (o != null)
+                    this.grpcPushMaxConcurrentCalls = (o instanceof Number) ? ((Number) o).intValue()
+                            : Integer.parseInt(o.toString());
             }
         } catch (FileNotFoundException e) {
             logger.info("No persisted properties file found at " + persistFile + ". Using defaults.");

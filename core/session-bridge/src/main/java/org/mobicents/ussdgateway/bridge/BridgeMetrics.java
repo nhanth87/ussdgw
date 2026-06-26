@@ -49,6 +49,7 @@ public final class BridgeMetrics {
     private final AtomicLong lateSyncGrpc = new AtomicLong();
     private final AtomicLong lateSyncSip = new AtomicLong();
     private final AtomicLong latePushHttp = new AtomicLong();
+    private final AtomicLong latePushGrpc = new AtomicLong();
     private final AtomicLong latePushSip = new AtomicLong();
     private final AtomicLong lateDuplicate = new AtomicLong();
     private final AtomicLong lateAborted = new AtomicLong();
@@ -69,6 +70,7 @@ public final class BridgeMetrics {
             case SYNC_GRPC: lateSyncGrpc.incrementAndGet(); break;
             case SYNC_SIP:  lateSyncSip.incrementAndGet(); break;
             case PUSH_HTTP: latePushHttp.incrementAndGet(); break;
+            case PUSH_GRPC: latePushGrpc.incrementAndGet(); break;
             case PUSH_SIP:  latePushSip.incrementAndGet(); break;
             default: break;
         }
@@ -108,6 +110,10 @@ public final class BridgeMetrics {
 
     public long getLatePushHttp() {
         return latePushHttp.get();
+    }
+
+    public long getLatePushGrpc() {
+        return latePushGrpc.get();
     }
 
     public long getLatePushSip() {
@@ -229,7 +235,7 @@ public final class BridgeMetrics {
                 + ", completed=" + sessionsCompleted + ", expired=" + sessionsExpired
                 + ", aborted=" + sessionsAborted
                 + ", lateSync(http/grpc/sip)=" + lateSyncHttp + "/" + lateSyncGrpc + "/" + lateSyncSip
-                + ", latePush(http/sip)=" + latePushHttp + "/" + latePushSip
+                + ", latePush(http/grpc/sip)=" + latePushHttp + "/" + latePushGrpc + "/" + latePushSip
                 + ", lateDup=" + lateDuplicate + ", lateAborted=" + lateAborted
                 + ", lateExpired=" + lateExpired + ", lateStale=" + lateStale + "]";
     }

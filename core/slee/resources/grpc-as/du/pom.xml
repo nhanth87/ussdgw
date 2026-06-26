@@ -29,6 +29,11 @@
             <artifactId>ussd-grpc-as-ra-ra</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>ussd-grpc-as-ra-events</artifactId>
+            <version>${project.version}</version>
+        </dependency>
     </dependencies>
 
     <build>

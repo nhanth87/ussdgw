@@ -19,6 +19,7 @@
   						<li><a href="#ss7settings" data-toggle="tab">SS7 settings</a></li>
   						<li><a href="#various" data-toggle="tab">Various</a></li>
   						<li><a href="#sessionbridge" data-toggle="tab">Session Bridge</a></li>
+  						<li><a href="#grpcpush" data-toggle="tab">gRPC Push</a></li>
 					</ul>	
 						
   				 	<div id="sbb-op-content" class="tab-content">
@@ -198,6 +199,42 @@
 								</span>
 							</div>
                         </div>
+
+                        <div class="tab-pane" id="grpcpush">
+                        	<h5 style="border-bottom: 1px solid #DDD;">gRPC Push Ingress (Gateway as gRPC Server)</h5>
+                        	<p class="muted">AS connects to the gateway on this port for Network-Initiated push (gRPC method Process with push=true). Mirrors HTTP servlet push.</p>
+
+                        	<div id="div-grpcpushserverenabled" class="control-group">
+								<span class="input-prepend" data-toggle="tooltip" data-placement="bottom" title="When enabled the gateway listens for NI push over gRPC. Requires restart of gRPC RA if hot-reload fails.">
+									<span class="add-on">gRPC push server enabled</span>
+									<select id="grpcpushserverenabled" >
+										<option>false</option>
+										<option>true</option>
+									</select>
+								</span>
+							</div>
+
+                        	<div id="div-grpcpushserverport" class="control-group">
+								<span class="input-prepend" data-toggle="tooltip" data-placement="bottom" title="TCP listen port for gRPC push ingress (default 8453).">
+									<span class="add-on">gRPC push port</span>
+									<input id="grpcpushserverport" type="text" class="input-mini" style="width: 120px; margin-right: 12px; text-align: center;" value="8453" />
+								</span>
+							</div>
+
+                        	<div id="div-grpcpushworkerthreads" class="control-group">
+								<span class="input-prepend" data-toggle="tooltip" data-placement="bottom" title="Netty worker threads. 0 = auto (4 × CPU cores, minimum 8).">
+									<span class="add-on">gRPC push worker threads</span>
+									<input id="grpcpushworkerthreads" type="text" class="input-mini" style="width: 120px; margin-right: 12px; text-align: center;" value="0" />
+								</span>
+							</div>
+
+                        	<div id="div-grpcpushmaxconcurrent" class="control-group">
+								<span class="input-prepend" data-toggle="tooltip" data-placement="bottom" title="Max concurrent unary RPCs per connection (throughput tuning, default 10000).">
+									<span class="add-on">gRPC max concurrent calls</span>
+									<input id="grpcpushmaxconcurrent" type="text" class="input-mini" style="width: 120px; margin-right: 12px; text-align: center;" value="10000" />
+								</span>
+							</div>
+                        </div>
 					</div>	
 					</span>					 
 				</p>	
@@ -249,6 +286,16 @@
 										$("#asynchardfailmessage").val(response.value.AsyncHardFailMessage);
 										$("#bridgestatettlsec").val(response.value.BridgeStateTtlSec);
 										$("#pushretrydelaysms").val(response.value.PushRetryDelaysMs);
+
+										var gpe = document.getElementById("grpcpushserverenabled");
+										if(response.value.GrpcPushServerEnabled == true){
+											gpe.options[1].selected = 'selected';
+										} else {
+											gpe.options[0].selected = 'selected';
+										}
+										$("#grpcpushserverport").val(response.value.GrpcPushServerPort);
+										$("#grpcpushworkerthreads").val(response.value.GrpcPushWorkerThreads);
+										$("#grpcpushmaxconcurrent").val(response.value.GrpcPushMaxConcurrentCalls);
 
 										$("#gtinisel").append(new Option("0", response.value.UssdGt));
 										
@@ -395,6 +442,12 @@
 						var bridgestatettlsec = $("#bridgestatettlsec").val();
 						var pushretrydelaysms = $("#pushretrydelaysms").val();
 
+						var gpe = document.getElementById("grpcpushserverenabled");
+						var grpcpushserverenabled = (gpe.options[gpe.selectedIndex].text == "true");
+						var grpcpushserverport = $("#grpcpushserverport").val();
+						var grpcpushworkerthreads = $("#grpcpushworkerthreads").val();
+						var grpcpushmaxconcurrent = $("#grpcpushmaxconcurrent").val();
+
 						if(formInvalid) {
 							$("#login-settings-error").show();
 							logToConsole("ERROR", "Some Fields are not correctly filled out, please double check the settings !");
@@ -428,6 +481,10 @@
 									{ type: "write", mbean: mbeanSearch, attribute: "AsyncHardFailMessage", value: asynchardfailmessage },
 									{ type: "write", mbean: mbeanSearch, attribute: "BridgeStateTtlSec", value: bridgestatettlsec },
 									{ type: "write", mbean: mbeanSearch, attribute: "PushRetryDelaysMs", value: pushretrydelaysms },
+									{ type: "write", mbean: mbeanSearch, attribute: "GrpcPushServerEnabled", value: grpcpushserverenabled },
+									{ type: "write", mbean: mbeanSearch, attribute: "GrpcPushServerPort", value: grpcpushserverport },
+									{ type: "write", mbean: mbeanSearch, attribute: "GrpcPushWorkerThreads", value: grpcpushworkerthreads },
+									{ type: "write", mbean: mbeanSearch, attribute: "GrpcPushMaxConcurrentCalls", value: grpcpushmaxconcurrent },
 								],
 								{
 									success: function(response) {
