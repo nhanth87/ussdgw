@@ -7,7 +7,7 @@
     <parent>
         <groupId>org.mobicents.ussd</groupId>
         <artifactId>ussd-grpc-as-ra</artifactId>
-        <version>7.3.0-SNAPSHOT</version>
+        <version>7.3.1-SNAPSHOT</version>
     </parent>
 
     <artifactId>ussd-grpc-as-ra-library</artifactId>
@@ -18,6 +18,11 @@
             <groupId>javax.slee</groupId>
             <artifactId>jain-slee</artifactId>
             <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>${gson.version}</version>
         </dependency>
         <dependency>
             <groupId>org.testng</groupId>

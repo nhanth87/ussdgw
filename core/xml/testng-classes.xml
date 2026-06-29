@@ -12,6 +12,7 @@
 			<class name="org.mobicents.ussdgateway.CoreXmlCompatibilityTest"></class>
 			<class name="org.mobicents.ussdgateway.CompleteXmlCompatibilityTest"></class>
 			<class name="org.mobicents.ussdgateway.XmlDocumentationSamplesTest"></class>
+			<class name="org.mobicents.ussdgateway.JacksonXmlTest"></class>
 		</classes>
 	</test>
 

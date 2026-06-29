@@ -7,6 +7,7 @@
 
 package org.mobicents.ussd.grpc.ra.push;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.Executor;
@@ -31,13 +32,16 @@ import io.grpc.MethodDescriptor;
 import io.grpc.Server;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.Status;
+import io.grpc.netty.shaded.io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder;
+import io.grpc.netty.shaded.io.netty.handler.ssl.SslContext;
 import io.grpc.stub.ServerCalls;
 import io.grpc.stub.StreamObserver;
 
 public final class GrpcPushServer {
 
     private static final int NO_INPUT_GENERATION = -1;
+    private static final long GRACEFUL_SHUTDOWN_SECONDS = 10;
 
     public static final String EVENT_TYPE_NAME = "ussd.grpc.events.PUSH_RECEIVED";
     public static final String EVENT_VENDOR = "org.mobicents.ussd";
@@ -53,6 +57,14 @@ public final class GrpcPushServer {
     private volatile Server server;
     private volatile int port;
     private volatile int maxConcurrentCalls = 10000;
+
+    /**
+     * Server-side TLS context (GRPC-3). Null means plaintext. Set via
+     * {@link #setSslContext(String, String)} before {@link #start(int, int)}.
+     */
+    private volatile SslContext sslContext = null;
+    /** Path of the cert chain PEM file backing {@link #sslContext}, for log messages. */
+    private volatile String sslCertChainPath = null;
 
     public GrpcPushServer(GrpcAsResourceAdaptor ra, Tracer tracer, SleeEndpoint sleeEndpoint,
             FireableEventType pushEventType, int workerThreads) {
@@ -88,36 +100,78 @@ public final class GrpcPushServer {
             }
         };
 
-        server = NettyServerBuilder.forPort(listenPort)
+        NettyServerBuilder builder = NettyServerBuilder.forPort(listenPort)
                 .executor(executor)
-                .maxInboundMessageSize(4 * 1024 * 1024)
                 .maxConcurrentCallsPerConnection(maxConcurrentCalls)
-                .permitKeepAliveWithoutCalls(true)
-                .permitKeepAliveTime(30, TimeUnit.SECONDS)
-                .addService(service)
-                .build()
-                .start();
+                .addService(service);
+        SslContext ctx = this.sslContext;
+        if (ctx != null) {
+            builder.sslContext(ctx);
+        }
+        server = builder.build().start();
 
         if (tracer != null) {
-            tracer.info("gRPC push server listening on port " + listenPort + ", maxConcurrent="
-                    + maxConcurrentCalls + ", workers=" + ((java.util.concurrent.ThreadPoolExecutor) executor).getCorePoolSize());
+            String mode = (ctx != null) ? "TLS (cert=" + sslCertChainPath + ")" : "plaintext";
+            tracer.info("gRPC push server started on port " + listenPort
+                    + ", maxConcurrentCalls=" + maxConcurrentCalls + ", mode=" + mode);
+        }
+    }
+
+    /**
+     * Configure (or clear) the server-side TLS context (GRPC-3).
+     * <p>
+     * Pass non-null {@code certChainPath} and {@code privateKeyPath} (PEM files) to enable TLS.
+     * Pass null for both to revert to plaintext (default — backward compatible).
+     * <p>
+     * Callers must invoke this BEFORE {@link #start(int, int)} because gRPC's NettyServerBuilder
+     * only accepts the SSL context during build.
+     */
+    public synchronized void setSslContext(String certChainPath, String privateKeyPath) {
+        if (certChainPath == null || certChainPath.isEmpty()
+                || privateKeyPath == null || privateKeyPath.isEmpty()) {
+            this.sslContext = null;
+            this.sslCertChainPath = null;
+            if (tracer != null) {
+                tracer.info("gRPC push server TLS cleared (plaintext mode)");
+            }
+            return;
+        }
+        File cert = new File(certChainPath);
+        File key = new File(privateKeyPath);
+        if (!cert.isFile()) {
+            throw new IllegalArgumentException("certChain file not found: " + certChainPath);
+        }
+        if (!key.isFile()) {
+            throw new IllegalArgumentException("privateKey file not found: " + privateKeyPath);
+        }
+        try {
+            this.sslContext = GrpcSslContexts.forServer(cert, key).build();
+            this.sslCertChainPath = certChainPath;
+            if (tracer != null) {
+                tracer.info("gRPC push server TLS configured (cert=" + certChainPath + ")");
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to build gRPC push server SSL context", e);
         }
     }
 
     public synchronized void stop() {
-        if (server != null) {
+        Server s = this.server;
+        if (s != null) {
+            this.server = null;
             try {
-                server.shutdown();
-                server.awaitTermination(5, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
+                s.shutdown();
+                if (!s.awaitTermination(GRACEFUL_SHUTDOWN_SECONDS, TimeUnit.SECONDS)) {
+                    s.shutdownNow();
+                }
+            } catch (InterruptedException t) {
+                s.shutdownNow();
                 Thread.currentThread().interrupt();
-                server.shutdownNow();
             } catch (Throwable t) {
                 if (tracer != null) {
                     tracer.warning("gRPC push server shutdown", t);
                 }
             }
-            server = null;
         }
     }
 
@@ -125,7 +179,7 @@ public final class GrpcPushServer {
         return port;
     }
 
-  private void onProcess(byte[] requestBytes, StreamObserver<byte[]> responseObserver) {
+    private void onProcess(byte[] requestBytes, StreamObserver<byte[]> responseObserver) {
         try {
             Map<String, String> env = GrpcEnvelopeCodec.decode(requestBytes);
             boolean push = Boolean.parseBoolean(env.get(GrpcEnvelopeCodec.F_PUSH));
