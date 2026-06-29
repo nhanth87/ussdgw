@@ -5,7 +5,7 @@
     <property name="base.dir" location="${basedir}" />
     <property name="restcomm.ussd.dir" value="${basedir}/.." />
     <property name="m2.repo" value="${user.home}/.m2/repository" />
-    <property name="restcomm.ussd.release.version" value="7.3.0-SNAPSHOT"/>
+    <property name="restcomm.ussd.release.version" value="7.3.1-SNAPSHOT"/>
 
     <property name="wildfly.local.zip" value="${base.dir}/wildfly-10.0.0.Final-cleaned.zip" />
     <property name="wildfly.home.relative.path" value="wildfly-10.0.0.Final"/>

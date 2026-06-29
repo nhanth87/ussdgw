@@ -7,7 +7,7 @@ Hai bộ công cụ chính:
 | Công cụ | Vị trí | Vai trò |
 |---------|--------|---------|
 | **jSS7 MAP Load Client** | `jSS7/map/load` | Gửi MAP `ProcessUnstructuredSSRequest` qua SCTP/M3UA — giả lập thuê bao SS7 |
-| **gRPC Python tester** | `ussdgateway/tools/grpc-as-tester` | AS server + load generator gRPC trực tiếp (bypass MAP) |
+| **gRPC Python tester** | `ussdgateway/tools/grpc-as-tester` | AS server + load generator gRPC; `grpc_push_client.py` (NI Push → GW `:8453`) |
 | **HTTP loadtest** | `ussdgateway/tools/http-simulator/loadtest` | HTTP Pull AS + HTTP Push load (auto XML) |
 
 Cả ba dùng chung `menu_config.json` (multi-menu: Balance / Data / Subscribe).
@@ -34,7 +34,8 @@ Cả ba dùng chung `menu_config.json` (multi-menu: Balance / Data / Subscribe).
 | # | Thành phần | Chạy ở đâu | Port |
 |---|------------|------------|------|
 | 1 | **USSD Gateway** (Docker) | container, host network | SCTP **8012**, HTTP 8080, mgmt **9990** |
-| 2 | **gRPC AS** (Python) | trên cùng máy host | **8443** |
+| 2 | **gRPC AS** (Python) | trên cùng máy host | **8443** (Pull MO) |
+| 2b | **gRPC Push** (gateway server) | trong gateway | **8453** (NI Push) |
 | 3 | **MAP load client** (Java) | trên cùng máy host | bind SCTP **8011** → gọi GW **8012** |
 | 4 | **HTTP Pull AS** (tuỳ chọn) | host | **8049** (`*519#`) |
 
@@ -45,6 +46,19 @@ Cả ba dùng chung `menu_config.json` (multi-menu: Balance / Data / Subscribe).
 3. **HTTP Pull/Push** — gateway ↔ HTTP AS (`*519#`) hoặc client POST tới `/restcomm`.
 
 **Thứ tự bắt buộc:** Gateway + AS phải chạy **trước**, rồi mới chạy MAP client hoặc HTTP load.
+
+### Quy ước: Script shortcut ↔ lệnh thủ công
+
+Mỗi bước trong tài liệu có **hai cách** chạy:
+
+| Cách | Khi nào dùng |
+|------|----------------|
+| **Script** (`./scripts/NN-...sh`) | Regression nhanh — gộp nhiều lệnh, tự tạo venv/PID/log |
+| **Thay thế thủ công** | Debug từng công cụ — tester thấy rõ **đang gọi tool nào** và **lệnh đó làm gì** |
+
+- Biến môi trường chung: `source ./scripts/env.sh` (hoặc `PKG_ROOT=/opt/ussdgw-test`).
+- Bảng lệnh đầy đủ theo từng script → [Phụ lục A — Chạy thủ công từng công cụ](#phụ-lục-a--chạy-thủ-công-từng-công-cụ-thay-thế-script).
+- Trong các **Bước 2–9** bên dưới, khối **「Thay thế thủ công」** nằm ngay sau dòng script tương ứng.
 
 ---
 
@@ -98,6 +112,18 @@ chmod +x scripts/*.sh
 **Phải thấy toàn dòng `OK`**, không có `FAIL`.  
 Nếu `FAIL missing docker tar` → file `docker/restcomm-ussd-7.2.1-SNAPSHOT.tar` bị thiếu khi copy.
 
+#### Thay thế thủ công (Bước 2)
+
+| # | Lệnh | Làm gì |
+|---|------|--------|
+| 1 | `chmod +x scripts/*.sh` | Cho phép thực thi script |
+| 2 | `command -v docker && docker info` | Docker CLI + daemon sẵn sàng |
+| 3 | `java -version` | JDK 8 (MAP client) |
+| 4 | `python3 --version` | Python cho gRPC/HTTP AS |
+| 5 | `lsmod \| awk '/^sctp /'` | SCTP kernel (MAP/SS7) |
+| 6 | `test -f docker/restcomm-ussd-*.tar` | Tar image gateway trong package |
+| 7 | `test -f tools/jss7-map-load/lib/map-load.jar` | MAP load client đã bundle |
+
 ---
 
 ## Bước 3 — Load image Docker (không dừng gateway)
@@ -127,6 +153,19 @@ ls backups/
 | `--prune --keep N` | Dọn disk (giữ N bản + đang chạy + previous) |
 | `--no-backup` | Bỏ qua backup `/opt/ussdgw` |
 | `--list-images` | Xem tag + lịch sử switch |
+
+#### Thay thế thủ công (Bước 3 — load image)
+
+Giả sử `cd /opt/ussdgw-test` và `source ./scripts/env.sh`.
+
+| # | Lệnh | Làm gì |
+|---|------|--------|
+| 1 | `tar -tzf "${DOCKER_TAR}" \| head` | Kiểm tra tar trước khi load |
+| 2 | `docker load -i "${DOCKER_TAR}"` | Import image `restcomm-ussd` vào Docker local |
+| 3 | `docker images restcomm-ussd` | Xác nhận tag vừa load |
+| 4 | `cat gateway/.env` | Tag release dùng cho `docker compose` (script ghi sau load) |
+
+Chi tiết backup host, `--switch`, rollback → [Phụ lục A §A.1–A.3](#a1-load--switch--rollback-docker).
 
 ## Bước 3b — Switch gateway (downtime ngắn)
 
@@ -180,6 +219,16 @@ Tạo thư mục host, copy config-seed test (`*100#` gRPC, `*519#` HTTP). Nếu
 | `--list-backups` | Liệt kê backup |
 | `--restore <dir>` | Khôi phục `/opt/ussdgw` |
 | `--no-seed` | Chỉ init thư mục, không ghi đè XML |
+
+#### Thay thế thủ công (Bước 4)
+
+| # | Lệnh | Làm gì |
+|---|------|--------|
+| 1 | `sudo mkdir -p /opt/ussdgw/{data,logs}` | Thư mục runtime gateway trên host |
+| 2 | `sudo cp -a gateway/config-seed/* /opt/ussdgw/data/` | Seed rule `*100#` gRPC, `*519#` HTTP, bridge XML |
+| 3 | `ls /opt/ussdgw/data/UssdManagement_scroutingrule.xml` | Xác nhận routing đã copy |
+
+Script còn backup tự động nếu `data/` đã tồn tại — khi chạy tay nên backup trước: `sudo tar czf ussdgw-backup.tgz -C / opt/ussdgw`.
 
 ---
 
@@ -242,6 +291,18 @@ docker compose down
 
 > **Shortcut:** `./scripts/03-start-gateway.sh` = `cd gateway && docker compose up -d` + đợi health.
 
+#### Thay thế thủ công (Bước 5)
+
+| # | Lệnh | Làm gì |
+|---|------|--------|
+| 1 | `cd /opt/ussdgw-test/gateway` | Vào thư mục compose |
+| 2 | `docker compose up -d` | Khởi động `init` (seed data) + `ussdgw` (WildFly) |
+| 3 | `docker compose ps` | Container `ussd-ng` = running/healthy |
+| 4 | `curl -fs http://localhost:8080/jolokia/version` | Health HTTP — đợi 3–5 phút lần đầu |
+| 5 | `docker logs -f ussd-ng` | Theo dõi deploy SLEE (tuỳ chọn) |
+
+Dừng: `cd gateway && docker compose down` (tương đương `./scripts/04-stop-gateway.sh`).
+
 ---
 
 ## Bước 6 — Start gRPC Application Server (Python)
@@ -265,6 +326,17 @@ tail -3 grpc-as.log
 
 > **Shortcut:** `sudo ./scripts/start-all.sh` = Bước 3 + 4 + 5 + 6 gộp một lệnh.
 
+#### Thay thế thủ công (Bước 6 — gRPC Pull AS)
+
+| # | Lệnh | Làm gì |
+|---|------|--------|
+| 1 | `cd /opt/ussdgw-test/tools/grpc-as-tester` | Thư mục Python AS + `menu_config.json` |
+| 2 | `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt` | Venv (chỉ lần đầu; offline: `--find-links wheels`) |
+| 3 | `nohup .venv/bin/python ussd_as_server.py --port 8443 --min-delay 1 --max-delay 100 --menu-config menu_config.json > ../../grpc-as.log 2>&1 &` | AS lắng nghe gRPC — gateway là **client** tới `:8443` |
+| 4 | `tail -3 ../../grpc-as.log` | Phải thấy `USSD gRPC AS listening on :8443` |
+
+Dừng AS: `kill $(cat /opt/ussdgw-test/.grpc-as.pid)` hoặc `./scripts/05-stop-grpc-as.sh`.
+
 ---
 
 ## Bước 7 — Test luồng đầy đủ SS7 → Gateway → gRPC (MAP smoke)
@@ -278,6 +350,18 @@ Lệnh này gửi **10 cuộc gọi USSD** `*100#`, tự bấm menu `BALANCE` (c
 **Chờ ~30 giây – 2 phút** (có delay 20s khởi động SCTP lần đầu).
 
 Chi tiết CLI, load test, warmup → [Mục 5](#5-e2e-test--tool-1-jss7-map-load-client).
+
+#### Thay thế thủ công (Bước 7 — MAP smoke `*100#`)
+
+**Điều kiện:** Bước 5 (gateway healthy) + Bước 6 (gRPC AS `:8443`).
+
+| # | Lệnh | Làm gì |
+|---|------|--------|
+| 1 | `cd /opt/ussdgw-test/tools/jss7-map-load` | MAP load client (JAR trong `lib/`) |
+| 2 | `java -cp "lib/*" org.restcomm.protocols.ss7.map.load.ussd.Client 10 5 sctp 127.0.0.1 8011 -1 127.0.0.1 8012 IPSP 101 102 1 2 3 2 8 6 8 1111112 9960639999 1 4 -100 0 "*100#" BALANCE 50 200` | **10** dialogue SCTP, profile **BALANCE** (`1`→`0`), think 50–200 ms; gateway route `*100#` → gRPC AS |
+| 3 | `ls map-*.csv && tail maplog.txt` | Kết quả: `CompletedScenario`, throughput |
+
+Tắt warmup 60 s: thêm `-Dwarmup=false` trước `-cp`. Đổi short code/port: `source ../../scripts/env.sh` rồi dùng `"${USSD_SHORT_CODE}"` và `"${SCTP_GW_PORT}"`.
 
 ### Làm sao biết THÀNH CÔNG?
 
@@ -325,6 +409,36 @@ Chỉ test Python AS + load client, **không** qua Gateway:
 
 `errors = 0` → AS + multi-menu OK. Chi tiết → [Mục 6](#6-test--tool-2-grpc-python-loadtest_clientpy).
 
+#### Thay thế thủ công (Bước 8 — gRPC-only load)
+
+**Điều kiện:** Bước 6 (gRPC AS đang chạy). **Không** cần gateway cho test này.
+
+| # | Lệnh | Làm gì |
+|---|------|--------|
+| 1 | `cd /opt/ussdgw-test/tools/grpc-as-tester` | Cùng venv với `ussd_as_server.py` |
+| 2 | `.venv/bin/python loadtest_client.py --target localhost:8443 --tps 50 --duration 30 --multi-menu --profile BALANCE --think-min 50 --think-max 200 --menu-config menu_config.json` | Client gRPC gọi **trực tiếp** AS — đo TPS/latency multi-menu, bypass MAP |
+
+Tắt warmup: thêm `--no-warmup`.
+
+---
+
+## Bước 8b — (Tuỳ chọn) gRPC NI Push smoke
+
+Gateway nhận **Push NI** qua gRPC server (port **8453**). Cần bật trên web mgmt → tab **gRPC Push** → `GrpcPushServerEnabled=true`, port `8453`, service `mobicents-ussdgateway-server-grpc` deployed.
+
+```bash
+./scripts/14-run-grpc-push-smoke.sh
+```
+
+#### Thay thế thủ công (Bước 8b)
+
+| # | Lệnh | Làm gì |
+|---|------|--------|
+| 1 | Mở `http://localhost:9990` → Server Settings → gRPC Push | Bật push server gateway |
+| 2 | `curl -fs http://localhost:8080/jolokia/version` | Gateway healthy |
+| 3 | `cd /opt/ussdgw-test/tools/grpc-as-tester` | Tool `grpc_push_client.py` |
+| 4 | `.venv/bin/python grpc_push_client.py --target localhost:8453 --mode multi --profile BALANCE --tps 50 --duration 30 --think-min 50 --think-max 200 --menu-config menu_config.json` | Client gửi NI push tới **gateway** `:8453` (không qua MAP) |
+
 ---
 
 ## Bước 9 — Dừng hết
@@ -340,6 +454,14 @@ Dừng gRPC AS + Docker gateway:
 # hoặc thủ công:
 #   cd gateway && docker compose down
 ```
+
+#### Thay thế thủ công (Bước 9)
+
+| # | Lệnh | Làm gì |
+|---|------|--------|
+| 1 | `kill $(cat /opt/ussdgw-test/.grpc-as.pid 2>/dev/null) 2>/dev/null; rm -f .grpc-as.pid` | Dừng gRPC AS |
+| 2 | `kill $(cat /opt/ussdgw-test/.http-as.pid 2>/dev/null) 2>/dev/null; rm -f .http-as.pid` | Dừng HTTP Pull AS (nếu có) |
+| 3 | `cd /opt/ussdgw-test/gateway && docker compose down` | Dừng gateway + init |
 
 ---
 
@@ -366,23 +488,104 @@ Trong cửa sổ GUI:
 
 ---
 
-## Chạy từng bước riêng lẻ (thay vì `start-all.sh`)
+## Phụ lục A — Chạy thủ công từng công cụ (thay thế script)
 
-| Bước | Lệnh | Tương đương thủ công |
-|------|------|----------------------|
-| Load image | `./scripts/01-load-docker-image.sh` | backup `/opt/ussdgw` + `docker load` (GW vẫn chạy) |
-| Switch GW | `./scripts/03-switch-gateway.sh` | backup + recreate; lưu `.env.previous` |
-| Rollback GW | `./scripts/03-switch-gateway.sh --rollback` | image cũ vẫn trên disk |
-| Restore host | `./scripts/02-setup-host.sh --restore <dir>` | khôi phục `/opt/ussdgw` |
-| Setup host | `sudo ./scripts/02-setup-host.sh` | Tạo `/opt/ussdgw/data` |
-| **Start GW** | `./scripts/03-start-gateway.sh` | **`cd gateway && docker compose up -d`** |
-| Stop GW | `./scripts/04-stop-gateway.sh` | **`cd gateway && docker compose down`** |
-| Start gRPC AS | `./scripts/05-start-grpc-as.sh` | Python `ussd_as_server.py` |
-| Stop gRPC AS | `./scripts/05-stop-grpc-as.sh` | kill gRPC AS |
-| Start HTTP AS | `./scripts/09-start-http-as.sh` | HTTP Pull AS `:8049` |
-| HTTP Pull smoke | `./scripts/12-run-http-pull-smoke.sh` | MAP `*519#` × 10 |
-| HTTP Push smoke | `./scripts/13-run-http-push-smoke.sh` | Push 50 TPS × 30s |
-| Tất cả | `sudo ./scripts/start-all.sh` | Bước 1→6 gộp |
+Bảng dưới map **1:1** từng script → lệnh tay. `PKG=/opt/ussdgw-test` (đổi nếu giải nén chỗ khác).
+
+### A.0 — Biến môi trường chung
+
+```bash
+cd /opt/ussdgw-test
+source ./scripts/env.sh
+# Sau đó: $GRPC_AS_DIR, $MAP_LOAD_DIR, $HTTP_LOADTEST_DIR, $SCTP_GW_PORT, ...
+```
+
+### A.1 — Load / switch / rollback Docker
+
+| Script | Làm gì (tóm tắt) | Thay thế thủ công |
+|--------|------------------|-------------------|
+| `00-preflight.sh` | Kiểm tra docker, java, python, SCTP, tar, JAR | Chạy từng dòng trong [Bước 2 — Thay thế thủ công](#thay-thế-thủ-công-bước-2) |
+| `01-load-docker-image.sh` | Backup `/opt/ussdgw` + `docker load` | `docker load -i "${DOCKER_TAR}"` → `docker images restcomm-ussd` |
+| `03-switch-gateway.sh` | Recreate container với image mới | `cd gateway && docker compose down && docker compose up -d` (sau khi `gateway/.env` trỏ tag mới) |
+| `03-switch-gateway.sh --rollback` | Quay image trong `.env.previous` | Đọc `gateway/.env.previous`, ghi lại `USSDGW_IMAGE=...` vào `.env`, `compose up -d` |
+| `04-stop-gateway.sh` | Dừng gateway | `cd gateway && docker compose down` |
+
+### A.2 — Host + gateway
+
+| Script | Thay thế thủ công |
+|--------|-------------------|
+| `02-setup-host.sh` | `sudo mkdir -p /opt/ussdgw/{data,logs}` + `sudo cp -a gateway/config-seed/* /opt/ussdgw/data/` |
+| `03-start-gateway.sh` | `cd gateway && docker compose up -d` + `curl -fs http://localhost:8080/jolokia/version` |
+| `08-check-gateway.sh` | `docker compose ps` + Jolokia + `docker logs --tail 50 ussd-ng` |
+
+### A.3 — gRPC Pull AS + smoke
+
+| Script | # | Lệnh thủ công | Làm gì |
+|--------|---|---------------|--------|
+| `05-start-grpc-as.sh` | 1 | `cd "${GRPC_AS_DIR}"` | Vào tool gRPC |
+| | 2 | `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt` | Cài dependency (lần đầu) |
+| | 3 | `nohup .venv/bin/python ussd_as_server.py --port 8443 --min-delay 1 --max-delay 100 --menu-config menu_config.json > "${PKG_ROOT}/grpc-as.log" 2>&1 &` | AS server cho **Pull MO** `*100#` |
+| `05-stop-grpc-as.sh` | 1 | `kill $(cat "${PKG_ROOT}/.grpc-as.pid")` | Dừng process AS |
+| `06-run-map-smoke.sh` | 1 | `cd "${MAP_LOAD_DIR}"` | MAP client |
+| | 2 | `java -cp "lib/*" org.restcomm.protocols.ss7.map.load.ussd.Client 10 5 sctp 127.0.0.1 8011 -1 127.0.0.1 8012 IPSP 101 102 1 2 3 2 8 6 8 1111112 9960639999 1 4 -100 0 "*100#" BALANCE 50 200` | E2E SS7→GW→gRPC, 10 dialog |
+| `07-run-grpc-smoke.sh` | 1 | `cd "${GRPC_AS_DIR}"` | |
+| | 2 | `.venv/bin/python loadtest_client.py --target localhost:8443 --tps 50 --duration 30 --multi-menu --profile BALANCE --think-min 50 --think-max 200 --menu-config menu_config.json` | Load trực tiếp AS, không MAP |
+
+### A.4 — HTTP Pull / Push
+
+| Script | # | Lệnh thủ công | Làm gì |
+|--------|---|---------------|--------|
+| `09-start-http-as.sh` | 1 | `cd "${HTTP_LOADTEST_DIR}"` | HTTP simulator |
+| | 2 | `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt` | Venv (lần đầu) |
+| | 3 | `nohup .venv/bin/python http_as_server.py --port 8049 --min-delay 1 --max-delay 100 --menu-config menu_config.json > "${PKG_ROOT}/http-as.log" 2>&1 &` | AS **Pull** — gateway POST tới `:8049` |
+| `12-run-http-pull-smoke.sh` | 1 | `curl -fs http://127.0.0.1:8049/ -o /dev/null -X POST -d ''` | Kiểm tra HTTP AS sống |
+| | 2 | `cd "${MAP_LOAD_DIR}"` + `java -cp "lib/*" ... "*519#" BALANCE 50 200` | E2E MAP `*519#` → HTTP AS (cùng args SCTP như Bước 7, đổi short code) |
+| `13-run-http-push-smoke.sh` | 1 | `cd "${HTTP_LOADTEST_DIR}"` | |
+| | 2 | `.venv/bin/python http_push_loadtest.py --target http://127.0.0.1:8080/restcomm --mode multi --profile BALANCE --tps 50 --duration 30 --think-min 50 --think-max 200 --menu-config menu_config.json` | **Push NI** — client POST XmlMAP tới gateway |
+
+Lệnh MAP đầy đủ cho `*519#`:
+
+```bash
+cd "${MAP_LOAD_DIR}"
+java -cp "lib/*" org.restcomm.protocols.ss7.map.load.ussd.Client \
+  10 5 sctp 127.0.0.1 8011 -1 127.0.0.1 8012 IPSP 101 102 1 2 3 2 8 6 8 \
+  1111112 9960639999 1 4 -100 0 "*519#" BALANCE 50 200
+```
+
+### A.5 — gRPC NI Push
+
+| Script | # | Lệnh thủ công | Làm gì |
+|--------|---|---------------|--------|
+| `14-run-grpc-push-smoke.sh` | 1 | Bật gRPC Push trên web mgmt `:9990` | Gateway listen **8453** |
+| | 2 | `cd "${GRPC_AS_DIR}"` | |
+| | 3 | `.venv/bin/python grpc_push_client.py --target localhost:8453 --mode multi --profile BALANCE --tps 50 --duration 30 --think-min 50 --think-max 200 --menu-config menu_config.json` | Push NI qua gRPC tới gateway |
+
+### A.6 — Gộp / dừng lab
+
+| Script | Thay thế thủ công (theo thứ tự) |
+|--------|--------------------------------|
+| `start-all.sh` | `00-preflight` → `01-load` → `sudo 02-setup` → `03-start-gateway` → `05-start-grpc-as` |
+| `stop-all.sh` | `05-stop-grpc-as` → `09-stop-http-as` → `04-stop-gateway` |
+
+---
+
+## Chạy từng bước riêng lẻ (tham chiếu nhanh script)
+
+| Bước | Script | Tóm tắt | Chi tiết lệnh tay |
+|------|--------|---------|-------------------|
+| Preflight | `00-preflight.sh` | Kiểm tra môi trường | [A.1](#a1--load--switch--rollback-docker) |
+| Load image | `01-load-docker-image.sh` | `docker load` + backup | [A.1](#a1--load--switch--rollback-docker) |
+| Switch GW | `03-switch-gateway.sh` | Recreate container | [A.1](#a1--load--switch--rollback-docker) |
+| Setup host | `02-setup-host.sh` | Seed `/opt/ussdgw` | [A.2](#a2--host--gateway) |
+| **Start GW** | `03-start-gateway.sh` | `docker compose up -d` | [A.2](#a2--host--gateway) |
+| Start gRPC AS | `05-start-grpc-as.sh` | `ussd_as_server.py :8443` | [A.3](#a3--grpc-pull-as--smoke) |
+| MAP smoke | `06-run-map-smoke.sh` | `*100#` × 10 | [A.3](#a3--grpc-pull-as--smoke) |
+| gRPC smoke | `07-run-grpc-smoke.sh` | `loadtest_client.py` | [A.3](#a3--grpc-pull-as--smoke) |
+| Start HTTP AS | `09-start-http-as.sh` | `http_as_server.py :8049` | [A.4](#a4--http-pull--push) |
+| HTTP Pull smoke | `12-run-http-pull-smoke.sh` | MAP `*519#` × 10 | [A.4](#a4--http-pull--push) |
+| HTTP Push smoke | `13-run-http-push-smoke.sh` | Push 50 TPS × 30s | [A.4](#a4--http-pull--push) |
+| gRPC Push smoke | `14-run-grpc-push-smoke.sh` | Push gRPC 50 TPS × 30s | [A.5](#a5--grpc-ni-push) |
+| Tất cả | `start-all.sh` | Bước 1→6 gộp | [A.6](#a6--gộp--dừng-lab) |
 
 ---
 
@@ -655,6 +858,18 @@ Từ `ussdgw-test` (gateway + MAP client đã chạy):
 ./scripts/12-run-http-pull-smoke.sh    # 10 dialog, *519#, BALANCE
 ```
 
+#### Thay thế thủ công (7.1)
+
+| # | Lệnh | Làm gì |
+|---|------|--------|
+| 1 | `cd /opt/ussdgw-test && source scripts/env.sh` | Biến `$HTTP_LOADTEST_DIR`, `$MAP_LOAD_DIR` |
+| 2 | `cd "${HTTP_LOADTEST_DIR}" && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt` | Venv HTTP AS (lần đầu) |
+| 3 | `nohup .venv/bin/python http_as_server.py --port 8049 --min-delay 1 --max-delay 100 --menu-config menu_config.json > ../../http-as.log 2>&1 &` | HTTP Pull AS — gateway POST MO tới đây |
+| 4 | `cd "${MAP_LOAD_DIR}"` | MAP client |
+| 5 | `java -cp "lib/*" org.restcomm.protocols.ss7.map.load.ussd.Client 10 5 sctp 127.0.0.1 8011 -1 127.0.0.1 8012 IPSP 101 102 1 2 3 2 8 6 8 1111112 9960639999 1 4 -100 0 "*519#" BALANCE 50 200` | 10 dialogue `*519#` qua SCTP → gateway → HTTP AS |
+
+Bridge test: thay bước 3 bằng `http_as_server.py --port 8049 --bridge-delay 8000 --bridge-every 10`.
+
 ### 7.2 HTTP Push — load 1000 TPS
 
 ```bash
@@ -673,6 +888,15 @@ Từ `ussdgw-test`:
 ```bash
 ./scripts/13-run-http-push-smoke.sh    # smoke 50 TPS × 30s
 ```
+
+#### Thay thế thủ công (7.2 — smoke 50 TPS)
+
+| # | Lệnh | Làm gì |
+|---|------|--------|
+| 1 | `cd /opt/ussdgw-test/tools/http-simulator/loadtest` | Tool push (có thể dùng chung venv với `09-start-http-as`) |
+| 2 | `.venv/bin/python http_push_loadtest.py --target http://127.0.0.1:8080/restcomm --mode multi --profile BALANCE --tps 50 --duration 30 --think-min 50 --think-max 200 --menu-config menu_config.json` | Client tự build XmlMAPDialog, POST **NI** tới gateway `/restcomm` |
+
+High load 1000 TPS: đổi `--tps 1000` (giữ gateway healthy). Tắt warmup: `--no-warmup`.
 
 **Tắt warmup:**
 
@@ -854,6 +1078,23 @@ Chạy sau gateway healthy + AS up. Mục tiêu: xác nhận bridge trước hig
 
 #### 8.5.1 gRPC Pull — một dialogue bridge
 
+**Script:**
+
+```bash
+cd ussdgw-test && ./scripts/05-start-grpc-as.sh   # hoặc AS với bridge-delay bên dưới
+```
+
+**Thay thế thủ công:**
+
+| # | Lệnh | Làm gì |
+|---|------|--------|
+| 1 | `cd /opt/ussdgw-test/tools/grpc-as-tester` | |
+| 2 | `.venv/bin/python ussd_as_server.py --port 8443 --bridge-delay 8000 --bridge-every 1 --min-delay 1 --max-delay 50 --menu-config menu_config.json` | AS cố ý trả lời **sau** adaptive gate → kích bridge S1+S2 |
+| 3 | `cd /opt/ussdgw-test/tools/jss7-map-load` | |
+| 4 | `java -cp "lib/*" org.restcomm.protocols.ss7.map.load.ussd.Client 10 5 sctp 127.0.0.1 8011 -1 127.0.0.1 8012 IPSP 101 102 1 2 3 2 8 6 8 1111112 9960639999 1 4 -100 0 "*100#" BALANCE 50 200` | MAP smoke (hoặc `./scripts/06-run-map-smoke.sh` nếu AS đã chạy với bridge flags) |
+
+Hoặc gộp AS + MAP:
+
 ```bash
 cd ussdgateway/tools/grpc-as-tester
 ./.venv/bin/python ussd_as_server.py \
@@ -867,15 +1108,36 @@ cd ussdgw-test && ./scripts/06-run-map-smoke.sh
 
 #### 8.5.2 HTTP Pull bridge (`*519#`)
 
-```bash
-cd ussdgateway/tools/http-simulator/loadtest
-python3 http_as_server.py --port 8049 --bridge-delay 8000 --bridge-every 1
+**Script:**
 
+```bash
 cd ussdgw-test && ./scripts/09-start-http-as.sh
 ./scripts/12-run-http-pull-smoke.sh
 ```
 
+**Thay thế thủ công:**
+
+| # | Lệnh | Làm gì |
+|---|------|--------|
+| 1 | `cd /opt/ussdgw-test/tools/http-simulator/loadtest` | |
+| 2 | `python3 http_as_server.py --port 8049 --bridge-delay 8000 --bridge-every 1` | HTTP AS bridge — trì hoãn response trên **cùng** POST MO |
+| 3 | `cd /opt/ussdgw-test/tools/jss7-map-load` | |
+| 4 | `java -cp "lib/*" org.restcomm.protocols.ss7.map.load.ussd.Client 10 5 sctp 127.0.0.1 8011 -1 127.0.0.1 8012 IPSP 101 102 1 2 3 2 8 6 8 1111112 9960639999 1 4 -100 0 "*519#" BALANCE 50 200` | MAP `*519#` kích bridge HTTP |
+
+Hoặc từ source tree:
+
+```bash
+cd ussdgateway/tools/http-simulator/loadtest
+python3 http_as_server.py --port 8049 --bridge-delay 8000 --bridge-every 1
+```
+
 #### 8.5.3 Chỉ adaptive gate (không cố bridge)
+
+| # | Lệnh | Làm gì |
+|---|------|--------|
+| 1 | `cd /opt/ussdgw-test/tools/grpc-as-tester && .venv/bin/python ussd_as_server.py --port 8443 --min-delay 1 --max-delay 100` | AS latency ngẫu nhiên — nuôi EWMA gate |
+| 2 | `cd /opt/ussdgw-test/tools/jss7-map-load` | |
+| 3 | `java -cp "lib/*" org.restcomm.protocols.ss7.map.load.ussd.Client 50 10 sctp 127.0.0.1 8011 -1 127.0.0.1 8012 IPSP 101 102 1 2 3 2 8 6 8 1111112 9960639999 1 16 -100 0 "*100#" ADAPTIVE 50 500` | 50 dialog, profile **ADAPTIVE**, không `--bridge-delay` |
 
 ```bash
 ./.venv/bin/python ussd_as_server.py --port 8443 --min-delay 1 --max-delay 100
@@ -1111,4 +1373,4 @@ Chi tiết: [`docs/design/virtual-session-bridge.md`](design/virtual-session-bri
 
 ---
 
-*Cập nhật: 2026-06-22 — §8 adaptive timeout/bridge high-load matrix, TPS warmup, HTTP Pull/Push, workflow package + GUI 401.*
+*Cập nhật: 2026-06-25 — Phụ lục A lệnh thủ công từng công cụ; gRPC Push smoke (script 14); §8 adaptive timeout/bridge high-load matrix.*

@@ -7,7 +7,7 @@
     <property name="bundle.docs.dir" location="${base.dir}/docs-bundle" />
     <property name="restcomm.ussd.dir" value="${base.dir}/.." />
     <property name="m2.repo" value="${sys.USERPROFILE}/.m2/repository" />
-    <property name="restcomm.ussd.release.version" value="7.3.0-SNAPSHOT"/>
+    <property name="restcomm.ussd.release.version" value="7.3.1-SNAPSHOT"/>
 
     <!-- WildFly 10 base distro (cleaned SIP servlets) -->
     <property name="wildfly.local.zip" value="${base.dir}/wildfly-10.0.0.Final-cleaned.zip" />

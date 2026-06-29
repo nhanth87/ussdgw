@@ -35,6 +35,32 @@
             <config-property-value>30000</config-property-value>
         </config-property>
 
+        <!-- GRPC-2: Enable TLS on the gRPC client channels to the Application Server. -->
+        <config-property>
+            <config-property-name>GRPC_USE_SSL</config-property-name>
+            <config-property-type>java.lang.Boolean</config-property-type>
+            <config-property-value>false</config-property-value>
+        </config-property>
+        <!-- Optional JKS trust-store path. Empty = use JVM default trust store (cacerts). -->
+        <config-property>
+            <config-property-name>GRPC_SSL_TRUST_STORE</config-property-name>
+            <config-property-type>java.lang.String</config-property-type>
+            <config-property-value></config-property-value>
+        </config-property>
+
+        <!-- GRPC-3: PEM cert chain for the gRPC push server (gateway as gRPC server). -->
+        <config-property>
+            <config-property-name>GRPC_PUSH_SSL_CERT_CHAIN</config-property-name>
+            <config-property-type>java.lang.String</config-property-type>
+            <config-property-value></config-property-value>
+        </config-property>
+        <!-- PEM private key matching GRPC_PUSH_SSL_CERT_CHAIN. -->
+        <config-property>
+            <config-property-name>GRPC_PUSH_SSL_PRIVATE_KEY</config-property-name>
+            <config-property-type>java.lang.String</config-property-type>
+            <config-property-value></config-property-value>
+        </config-property>
+
     </resource-adaptor>
 
 </resource-adaptor-jar>

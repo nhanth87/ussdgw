@@ -1,0 +1,10 @@
+{
+  "supermemory-mcp": {
+    "command": "npx",
+    "args": ["-y", "mcp-remote", "https://mcp.supermemory.ai/mcp"],
+    "env": {},
+    "headers": {
+      "Authorization": "Bearer sm_XxF1CCFCGeXvkkTTMXE1MV_z07EW3FRUMFVh3OFkv91UFwhnp6Pn2bUDaZAiQFZQY0jBkIKi4cQtDNAQ6OjmuCF"
+    }
+  }
+}
