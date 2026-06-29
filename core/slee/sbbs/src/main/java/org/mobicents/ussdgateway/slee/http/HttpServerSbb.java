@@ -237,7 +237,7 @@ public abstract class HttpServerSbb extends ChildServerSbb implements SriParent 
 			org.mobicents.ussdgateway.slee.SessionBridgeSupport bridge =
 					org.mobicents.ussdgateway.slee.SessionBridgeSupport.getInstance();
 			String bridgeCorrelationId = null;
-			if (bridge.isEnabled()) {
+			if (bridge.isHttpServerEnabled()) {
 				String requestId = event.getRequest().getHeader("X-Ussd-Request-Id");
 				if (requestId != null) {
 					int inputGen = parseInputGeneration(event.getRequest().getHeader("X-Ussd-Input-Gen"));
@@ -260,21 +260,43 @@ public abstract class HttpServerSbb extends ChildServerSbb implements SriParent 
 			if (logger.isFinestEnabled())
 				logger.finest("Creating session activity.");
 
-			HttpSession httpSession = event.getRequest().getSession(true);
+			// SESS-1 (HYBRID strategy):
+			//   The HTTP Servlet RA has already created a session activity
+			//   (either multi-turn HttpSessionActivity or single-shot
+			//   HttpServletRequestActivityImpl) for this request and attached
+			//   it to this SBB's activity context. We MUST NOT call
+			//   event.getRequest().getSession(true) here — that would
+			//   force creation of an Undertow servlet session and
+			//   re-introduce the SESS-1 regression. Instead, look up the
+			//   activity the RA already attached.
+			HttpSessionActivity httpSessionActivity = this.getHttpSessionActivity();
+			if (httpSessionActivity == null) {
+				// Single-shot path: the RA registered an
+				// HttpServletRequestActivityImpl (no multi-turn session).
+				// No HttpSessionActivity to attach here; the per-request
+				// ActivityContextInterface is used directly via the
+				// `aci` parameter of this method.
+				if (logger.isFinestEnabled()) {
+					logger.finest("No HttpSessionActivity attached — single-shot path");
+				}
+				// Track the session ID for correlation only when we actually
+				// have a multi-turn session; otherwise keep CMP empty so
+				// downstream code can branch on it.
+				this.httpSessionIdCMP = null;
+			} else {
+				ActivityContextInterface httpSessionActivityContextInterface = httpServletRaActivityContextInterfaceFactory
+						.getActivityContextInterface(httpSessionActivity);
+				httpSessionActivityContextInterface.attach(super.sbbContext.getSbbLocalObject());
 
-			HttpSessionActivity httpSessionActivity = super.httpServletProvider.getHttpSessionActivity(httpSession);
-			ActivityContextInterface httpSessionActivityContextInterface = httpServletRaActivityContextInterfaceFactory
-					.getActivityContextInterface(httpSessionActivity);
-			httpSessionActivityContextInterface.attach(super.sbbContext.getSbbLocalObject());
-			
-			// Performance: Cache HTTP session activity for fast lookup
-			this.cachedHttpSessionActivity = httpSessionActivity;
-			
-			// Track session ID for correlation
-			this.httpSessionIdCMP = httpSessionActivity.getSessionId();
-			
-			if (logger.isFinestEnabled())
-				logger.finest("HTTP Session ID: " + httpSessionIdCMP);
+				// Performance: Cache HTTP session activity for fast lookup
+				this.cachedHttpSessionActivity = httpSessionActivity;
+
+				// Track session ID for correlation
+				this.httpSessionIdCMP = httpSessionActivity.getSessionId();
+
+				if (logger.isFinestEnabled())
+					logger.finest("HTTP Session ID: " + httpSessionIdCMP);
+			}
 
 //			if (!xmlMAPDialog.isRedirectRequest()) {
 
@@ -963,7 +985,7 @@ public abstract class HttpServerSbb extends ChildServerSbb implements SriParent 
             // retry queue; exhausting the retries triggers the notification fallback (SMS later).
             org.mobicents.ussdgateway.slee.SessionBridgeSupport bridge =
                     org.mobicents.ussdgateway.slee.SessionBridgeSupport.getInstance();
-            if (bridge.isEnabled()) {
+            if (bridge.isHttpServerEnabled()) {
                 String correlationId = state.getCorrelationId();
                 if (correlationId != null) {
                     bridge.enqueuePushRetry(correlationId,

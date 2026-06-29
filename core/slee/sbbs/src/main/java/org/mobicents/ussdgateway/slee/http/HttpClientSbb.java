@@ -311,7 +311,7 @@ super.ussdStatAggregator.updateUssdNotifyOperations();
 		Header[] correlationHeaders = null;
 		org.mobicents.ussdgateway.slee.SessionBridgeSupport bridge =
 				org.mobicents.ussdgateway.slee.SessionBridgeSupport.getInstance();
-		if (bridge.isEnabled()) {
+		if (bridge.isHttpClientEnabled()) {
 			String correlationId = getOrCreateLocalRaCdrState().getCorrelationId();
 			if (correlationId != null) {
 				String requestId = bridge.requestIdFor(correlationId);
@@ -428,7 +428,7 @@ super.ussdStatAggregator.updateUssdNotifyOperations();
 		try {
 			org.mobicents.ussdgateway.slee.SessionBridgeSupport bridge =
 					org.mobicents.ussdgateway.slee.SessionBridgeSupport.getInstance();
-			if (!bridge.isEnabled()) {
+			if (!bridge.isSyncReconcileEnabled()) {
 				return false;
 			}
 			USSDCDRState state = getOrCreateLocalRaCdrState();
