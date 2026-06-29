@@ -102,7 +102,7 @@ public abstract class GrpcServerSbb extends HttpServerSbb {
 
             SessionBridgeSupport bridge = SessionBridgeSupport.getInstance();
             String bridgeCorrelationId = null;
-            if (bridge.isEnabled()) {
+            if (bridge.isGrpcServerEnabled()) {
                 String requestId = event.getRequestId();
                 if (requestId != null) {
                     org.mobicents.ussdgateway.bridge.ReconcileResult rr = bridge.reconcileLateResponse(

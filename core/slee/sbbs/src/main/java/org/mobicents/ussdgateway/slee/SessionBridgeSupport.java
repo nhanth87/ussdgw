@@ -78,6 +78,36 @@ public final class SessionBridgeSupport {
         return p != null && p.isSessionBridgeEnabled();
     }
 
+    /** Bridge enabled AND HTTP client (MO pull) bridge active. */
+    public boolean isHttpClientEnabled() {
+        UssdPropertiesManagement p = props();
+        return p != null && p.isSessionBridgeEnabled() && p.isHttpClientBridgeEnabled();
+    }
+
+    /** Bridge enabled AND gRPC client (MO pull) bridge active. */
+    public boolean isGrpcClientEnabled() {
+        UssdPropertiesManagement p = props();
+        return p != null && p.isSessionBridgeEnabled() && p.isGrpcClientBridgeEnabled();
+    }
+
+    /** Bridge enabled AND HTTP server (NI push) bridge active. */
+    public boolean isHttpServerEnabled() {
+        UssdPropertiesManagement p = props();
+        return p != null && p.isSessionBridgeEnabled() && p.isHttpServerBridgeEnabled();
+    }
+
+    /** Bridge enabled AND gRPC server (NI push) bridge active. */
+    public boolean isGrpcServerEnabled() {
+        UssdPropertiesManagement p = props();
+        return p != null && p.isSessionBridgeEnabled() && p.isGrpcServerBridgeEnabled();
+    }
+
+    /** Bridge enabled AND Channel-A sync reconcile active. */
+    public boolean isSyncReconcileEnabled() {
+        UssdPropertiesManagement p = props();
+        return p != null && p.isSessionBridgeEnabled() && p.isBridgeSyncReconcileEnabled();
+    }
+
     /**
      * Effective gate timeout. Falls back to the dialog timeout when the configured gate is
      * non-positive or not strictly smaller than the dialog timeout.

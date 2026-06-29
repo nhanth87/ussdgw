@@ -136,16 +136,23 @@ public final class InMemoryVirtualSessionStore implements VirtualSessionStore {
         if (msisdn == null) {
             return true;
         }
-        long now = System.currentTimeMillis();
-        Expiring<String> existing = locks.get(msisdn);
-        if (existing != null && !existing.isExpired(now)) {
-            return false;
-        }
-        Expiring<String> fresh = new Expiring<String>(correlationId, now + ttlMillis);
-        if (existing == null) {
-            return locks.putIfAbsent(msisdn, fresh) == null;
-        }
-        return locks.replace(msisdn, existing, fresh);
+        final long now = System.currentTimeMillis();
+        final Expiring<String> fresh = new Expiring<String>(correlationId, now + ttlMillis);
+        final boolean[] acquired = new boolean[1];
+        // compute() runs atomically for the key, eliminating the race between
+        // expiry-check and replace() (false-negative when unlock() interleaves).
+        locks.compute(msisdn, new java.util.function.BiFunction<String, Expiring<String>, Expiring<String>>() {
+            @Override
+            public Expiring<String> apply(String key, Expiring<String> existing) {
+                if (existing == null || existing.isExpired(now)) {
+                    acquired[0] = true;
+                    return fresh;
+                }
+                acquired[0] = false;
+                return existing;
+            }
+        });
+        return acquired[0];
     }
 
     @Override

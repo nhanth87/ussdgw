@@ -143,7 +143,7 @@ public abstract class GrpcClientSbb extends ChildSbb {
 
     private int maxPollAttempts() {
         SessionBridgeSupport bridge = SessionBridgeSupport.getInstance();
-        long budget = bridge.isEnabled() ? bridge.gateTimeoutMs()
+        long budget = bridge.isGrpcClientEnabled() ? bridge.gateTimeoutMs()
                 : this.getUssdPropertiesManagement().getDialogTimeout();
         long attempts = budget / POLL_INTERVAL_MS;
         if (attempts < 1) {
@@ -232,7 +232,7 @@ public abstract class GrpcClientSbb extends ChildSbb {
     private boolean tryBridgeSyncReconcile(GrpcResponse response) {
         try {
             SessionBridgeSupport bridge = SessionBridgeSupport.getInstance();
-            if (!bridge.isEnabled()) {
+            if (!bridge.isSyncReconcileEnabled()) {
                 return false;
             }
             String correlationId = this.getGrpcCorrelationId();

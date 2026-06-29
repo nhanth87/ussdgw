@@ -121,6 +121,30 @@ public interface UssdPropertiesManagementMBean {
 
     public void setPushRetryDelaysMs(String pushRetryDelaysMs);
 
+    // ----- Per-protocol bridge enable/disable -----
+
+    public boolean isHttpClientBridgeEnabled();
+
+    public void setHttpClientBridgeEnabled(boolean httpClientBridgeEnabled);
+
+    public boolean isGrpcClientBridgeEnabled();
+
+    public void setGrpcClientBridgeEnabled(boolean grpcClientBridgeEnabled);
+
+    public boolean isHttpServerBridgeEnabled();
+
+    public void setHttpServerBridgeEnabled(boolean httpServerBridgeEnabled);
+
+    public boolean isGrpcServerBridgeEnabled();
+
+    public void setGrpcServerBridgeEnabled(boolean grpcServerBridgeEnabled);
+
+    // ----- Channel-A sync reconcile kill-switch -----
+
+    public boolean isBridgeSyncReconcileEnabled();
+
+    public void setBridgeSyncReconcileEnabled(boolean bridgeSyncReconcileEnabled);
+
     // ----- gRPC push ingress server (gateway as gRPC server) -----
 
     public boolean isGrpcPushServerEnabled();
@@ -138,5 +162,38 @@ public interface UssdPropertiesManagementMBean {
     public int getGrpcPushMaxConcurrentCalls();
 
     public void setGrpcPushMaxConcurrentCalls(int grpcPushMaxConcurrentCalls);
+
+    // ----- GRPC-2 / GRPC-3: TLS configuration -----
+
+    public boolean isGrpcUseSsl();
+
+    public void setGrpcUseSsl(boolean grpcUseSsl);
+
+    public String getGrpcSslTrustStore();
+
+    public void setGrpcSslTrustStore(String grpcSslTrustStore);
+
+    public String getGrpcPushSslCertChain();
+
+    public void setGrpcPushSslCertChain(String grpcPushSslCertChain);
+
+    public String getGrpcPushSslPrivateKey();
+
+    public void setGrpcPushSslPrivateKey(String grpcPushSslPrivateKey);
+
+    // ----- HYBRID session tracking (SESS-1) -----
+
+    /**
+     * Returns the currently configured HYBRID session tracking strategy:
+     * {@code HEADER_FIRST} (default), {@code COOKIE_FIRST} or
+     * {@code LOCALID_ONLY}.
+     */
+    public String getHttpSessionStrategy();
+
+    /**
+     * Sets the HYBRID session tracking strategy. Unknown values fall
+     * back to {@code HEADER_FIRST}.
+     */
+    public void setHttpSessionStrategy(String httpSessionStrategy);
 
 }

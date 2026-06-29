@@ -69,10 +69,28 @@ public class UssdPropertiesManagement implements UssdPropertiesManagementMBean {
     protected static final String BRIDGE_STATE_TTL_SEC = "bridgestatettlsec";
     protected static final String PUSH_RETRY_DELAYS_MS = "pushretrydelaysms";
 
+    // Per-protocol bridge enable/disable (requires sessionBridgeEnabled=true to take effect)
+    protected static final String HTTP_CLIENT_BRIDGE_ENABLED = "httpclientbridgeenabled";
+    protected static final String GRPC_CLIENT_BRIDGE_ENABLED = "grpcclientbridgeenabled";
+    protected static final String HTTP_SERVER_BRIDGE_ENABLED = "httpserverbridgeenabled";
+    protected static final String GRPC_SERVER_BRIDGE_ENABLED = "grpcserverbridgeenabled";
+
+    // Channel-A sync reconcile kill-switch (requires sessionBridgeEnabled=true)
+    protected static final String BRIDGE_SYNC_RECONCILE_ENABLED = "bridgesyncreconcileenabled";
+
     protected static final String GRPC_PUSH_SERVER_ENABLED = "grpcpushserverenabled";
     protected static final String GRPC_PUSH_SERVER_PORT = "grpcpushserverport";
     protected static final String GRPC_PUSH_WORKER_THREADS = "grpcpushworkerthreads";
     protected static final String GRPC_PUSH_MAX_CONCURRENT = "grpcpushmaxconcurrent";
+
+    // GRPC-2 / GRPC-3: TLS settings for gRPC client (gateway → AS) and push server (AS → gateway).
+    protected static final String GRPC_USE_SSL = "grpcusessl";
+    protected static final String GRPC_SSL_TRUST_STORE = "grpcssltruststore";
+    protected static final String GRPC_PUSH_SSL_CERT_CHAIN = "grpcpushsslcertchain";
+    protected static final String GRPC_PUSH_SSL_PRIVATE_KEY = "grpcpushsslprivatekey";
+
+    // HYBRID session tracking strategy (SESS-1). Values: HEADER_FIRST (default), COOKIE_FIRST, LOCALID_ONLY
+    protected static final String HTTP_SESSION_STRATEGY = "httpsessionstrategy";
 
     private static final String PERSIST_FILE_NAME = "ussdproperties.xml";
 
@@ -131,6 +149,15 @@ public class UssdPropertiesManagement implements UssdPropertiesManagementMBean {
     /** Comma-separated push retry back-off in milliseconds. */
     private String pushRetryDelaysMs = "3000,8000,15000";
 
+    // Per-protocol bridge enable/disable (default all true; master flag sessionBridgeEnabled must also be true)
+    private boolean httpClientBridgeEnabled = true;
+    private boolean grpcClientBridgeEnabled = true;
+    private boolean httpServerBridgeEnabled = true;
+    private boolean grpcServerBridgeEnabled = true;
+
+    // Channel-A sync reconcile kill-switch
+    private boolean bridgeSyncReconcileEnabled = true;
+
     /** Gateway listens for NI push over gRPC (AS is client). */
     private boolean grpcPushServerEnabled = false;
     /** TCP port for {@code ussd.UssdApplicationService/Process} push ingress. */
@@ -139,6 +166,26 @@ public class UssdPropertiesManagement implements UssdPropertiesManagementMBean {
     private int grpcPushWorkerThreads = 0;
     /** Max concurrent unary RPCs per connection (10k TPS target). */
     private int grpcPushMaxConcurrentCalls = 10000;
+
+    /** GRPC-2: enable TLS on gRPC client channels to the AS. */
+    private boolean grpcUseSsl = false;
+    /** GRPC-2: optional JKS trust-store path. Empty/null = use JVM default trust store. */
+    private String grpcSslTrustStore = null;
+    /** GRPC-3: PEM cert chain file path for the gRPC push server (gateway as server). */
+    private String grpcPushSslCertChain = null;
+    /** GRPC-3: PEM private key file path matching {@link #grpcPushSslCertChain}. */
+    private String grpcPushSslPrivateKey = null;
+
+    // ----- HYBRID session tracking (SESS-1) -----
+    /**
+     * Active strategy for resolving the HTTP session key on inbound
+     * requests. Valid values are {@code HEADER_FIRST} (default,
+     * recommended for modern AS), {@code COOKIE_FIRST} (recommended for
+     * legacy RestComm AS), and {@code LOCALID_ONLY} (legacy fallback).
+     * Operators can change this at runtime via the USSD GUI / Jolokia
+     * without redeploying the RA.
+     */
+    private String httpSessionStrategy = "HEADER_FIRST";
 
     private UssdPropertiesManagement(String name) {
         this.name = name;
@@ -429,6 +476,55 @@ public class UssdPropertiesManagement implements UssdPropertiesManagementMBean {
         this.store();
     }
 
+    // ----- Per-protocol bridge enable/disable -----
+
+    public boolean isHttpClientBridgeEnabled() {
+        return httpClientBridgeEnabled;
+    }
+
+    public void setHttpClientBridgeEnabled(boolean httpClientBridgeEnabled) {
+        this.httpClientBridgeEnabled = httpClientBridgeEnabled;
+        this.store();
+    }
+
+    public boolean isGrpcClientBridgeEnabled() {
+        return grpcClientBridgeEnabled;
+    }
+
+    public void setGrpcClientBridgeEnabled(boolean grpcClientBridgeEnabled) {
+        this.grpcClientBridgeEnabled = grpcClientBridgeEnabled;
+        this.store();
+    }
+
+    public boolean isHttpServerBridgeEnabled() {
+        return httpServerBridgeEnabled;
+    }
+
+    public void setHttpServerBridgeEnabled(boolean httpServerBridgeEnabled) {
+        this.httpServerBridgeEnabled = httpServerBridgeEnabled;
+        this.store();
+    }
+
+    public boolean isGrpcServerBridgeEnabled() {
+        return grpcServerBridgeEnabled;
+    }
+
+    public void setGrpcServerBridgeEnabled(boolean grpcServerBridgeEnabled) {
+        this.grpcServerBridgeEnabled = grpcServerBridgeEnabled;
+        this.store();
+    }
+
+    // ----- Channel-A sync reconcile kill-switch -----
+
+    public boolean isBridgeSyncReconcileEnabled() {
+        return bridgeSyncReconcileEnabled;
+    }
+
+    public void setBridgeSyncReconcileEnabled(boolean bridgeSyncReconcileEnabled) {
+        this.bridgeSyncReconcileEnabled = bridgeSyncReconcileEnabled;
+        this.store();
+    }
+
     public static void setGrpcPushServerController(GrpcPushServerController controller) {
         grpcPushServerController = controller;
     }
@@ -481,11 +577,95 @@ public class UssdPropertiesManagement implements UssdPropertiesManagementMBean {
         notifyGrpcPushServer();
     }
 
+    @Override
+    public boolean isGrpcUseSsl() {
+        return grpcUseSsl;
+    }
+
+    @Override
+    public void setGrpcUseSsl(boolean grpcUseSsl) {
+        this.grpcUseSsl = grpcUseSsl;
+        this.store();
+    }
+
+    @Override
+    public String getGrpcSslTrustStore() {
+        return grpcSslTrustStore;
+    }
+
+    @Override
+    public void setGrpcSslTrustStore(String grpcSslTrustStore) {
+        this.grpcSslTrustStore = (grpcSslTrustStore == null || grpcSslTrustStore.trim().isEmpty())
+                ? null : grpcSslTrustStore.trim();
+        this.store();
+    }
+
+    @Override
+    public String getGrpcPushSslCertChain() {
+        return grpcPushSslCertChain;
+    }
+
+    @Override
+    public void setGrpcPushSslCertChain(String grpcPushSslCertChain) {
+        this.grpcPushSslCertChain = (grpcPushSslCertChain == null || grpcPushSslCertChain.trim().isEmpty())
+                ? null : grpcPushSslCertChain.trim();
+        this.store();
+        notifyGrpcPushServer();
+    }
+
+    @Override
+    public String getGrpcPushSslPrivateKey() {
+        return grpcPushSslPrivateKey;
+    }
+
+    @Override
+    public void setGrpcPushSslPrivateKey(String grpcPushSslPrivateKey) {
+        this.grpcPushSslPrivateKey = (grpcPushSslPrivateKey == null || grpcPushSslPrivateKey.trim().isEmpty())
+                ? null : grpcPushSslPrivateKey.trim();
+        this.store();
+        notifyGrpcPushServer();
+    }
+
+    // ----- HYBRID session tracking (SESS-1) -----
+
+    /**
+     * Returns the currently configured HYBRID session strategy. The
+     * value is one of {@code HEADER_FIRST} (default), {@code COOKIE_FIRST}
+     * or {@code LOCALID_ONLY}.
+     */
+    @Override
+    public String getHttpSessionStrategy() {
+        return httpSessionStrategy;
+    }
+
+    /**
+     * Sets the HYBRID session strategy. Unknown / blank values fall back
+     * to {@code HEADER_FIRST}. Triggers a reconfigure via
+     * {@link #store()} so the change persists across restarts.
+     */
+    @Override
+    public void setHttpSessionStrategy(String httpSessionStrategy) {
+        String normalized = (httpSessionStrategy == null) ? null : httpSessionStrategy.trim();
+        if (normalized == null || normalized.isEmpty()) {
+            normalized = "HEADER_FIRST";
+        } else {
+            String upper = normalized.toUpperCase();
+            if (!"HEADER_FIRST".equals(upper) && !"COOKIE_FIRST".equals(upper) && !"LOCALID_ONLY".equals(upper)) {
+                logger.warn("Unknown HTTP_SESSION_STRATEGY value '" + normalized + "', falling back to HEADER_FIRST");
+                normalized = "HEADER_FIRST";
+            } else {
+                normalized = upper;
+            }
+        }
+        this.httpSessionStrategy = normalized;
+        this.store();
+    }
+
     private void notifyGrpcPushServer() {
         GrpcPushServerController controller = grpcPushServerController;
         if (controller != null) {
             controller.applyGrpcPushConfig(grpcPushServerEnabled, grpcPushServerPort, grpcPushWorkerThreads,
-                    grpcPushMaxConcurrentCalls);
+                    grpcPushMaxConcurrentCalls, grpcPushSslCertChain, grpcPushSslPrivateKey);
         }
     }
 
@@ -575,10 +755,24 @@ public class UssdPropertiesManagement implements UssdPropertiesManagementMBean {
             properties.put(ASYNC_HARD_FAIL_MESSAGE, this.asyncHardFailMessage);
             properties.put(BRIDGE_STATE_TTL_SEC, this.bridgeStateTtlSec);
             properties.put(PUSH_RETRY_DELAYS_MS, this.pushRetryDelaysMs);
+
+            properties.put(HTTP_CLIENT_BRIDGE_ENABLED, this.httpClientBridgeEnabled);
+            properties.put(GRPC_CLIENT_BRIDGE_ENABLED, this.grpcClientBridgeEnabled);
+            properties.put(HTTP_SERVER_BRIDGE_ENABLED, this.httpServerBridgeEnabled);
+            properties.put(GRPC_SERVER_BRIDGE_ENABLED, this.grpcServerBridgeEnabled);
+            properties.put(BRIDGE_SYNC_RECONCILE_ENABLED, this.bridgeSyncReconcileEnabled);
+
             properties.put(GRPC_PUSH_SERVER_ENABLED, this.grpcPushServerEnabled);
             properties.put(GRPC_PUSH_SERVER_PORT, this.grpcPushServerPort);
             properties.put(GRPC_PUSH_WORKER_THREADS, this.grpcPushWorkerThreads);
             properties.put(GRPC_PUSH_MAX_CONCURRENT, this.grpcPushMaxConcurrentCalls);
+
+            properties.put(GRPC_USE_SSL, this.grpcUseSsl);
+            properties.put(GRPC_SSL_TRUST_STORE, this.grpcSslTrustStore);
+            properties.put(GRPC_PUSH_SSL_CERT_CHAIN, this.grpcPushSslCertChain);
+            properties.put(GRPC_PUSH_SSL_PRIVATE_KEY, this.grpcPushSslPrivateKey);
+
+            properties.put(HTTP_SESSION_STRATEGY, this.httpSessionStrategy);
 
             if (networkIdVsUssdGwGt.size() > 0) {
                 ArrayList<UssdGwGtNetworkIdElement> al = new ArrayList<>();
@@ -713,6 +907,26 @@ public class UssdPropertiesManagement implements UssdPropertiesManagementMBean {
                 if (o != null)
                     this.pushRetryDelaysMs = o.toString();
 
+                o = properties.get(HTTP_CLIENT_BRIDGE_ENABLED);
+                if (o != null)
+                    this.httpClientBridgeEnabled = (o instanceof Boolean) ? (Boolean) o : Boolean.parseBoolean(o.toString());
+
+                o = properties.get(GRPC_CLIENT_BRIDGE_ENABLED);
+                if (o != null)
+                    this.grpcClientBridgeEnabled = (o instanceof Boolean) ? (Boolean) o : Boolean.parseBoolean(o.toString());
+
+                o = properties.get(HTTP_SERVER_BRIDGE_ENABLED);
+                if (o != null)
+                    this.httpServerBridgeEnabled = (o instanceof Boolean) ? (Boolean) o : Boolean.parseBoolean(o.toString());
+
+                o = properties.get(GRPC_SERVER_BRIDGE_ENABLED);
+                if (o != null)
+                    this.grpcServerBridgeEnabled = (o instanceof Boolean) ? (Boolean) o : Boolean.parseBoolean(o.toString());
+
+                o = properties.get(BRIDGE_SYNC_RECONCILE_ENABLED);
+                if (o != null)
+                    this.bridgeSyncReconcileEnabled = (o instanceof Boolean) ? (Boolean) o : Boolean.parseBoolean(o.toString());
+
                 o = properties.get(GRPC_PUSH_SERVER_ENABLED);
                 if (o != null)
                     this.grpcPushServerEnabled = (o instanceof Boolean) ? (Boolean) o : Boolean.parseBoolean(o.toString());
@@ -729,6 +943,37 @@ public class UssdPropertiesManagement implements UssdPropertiesManagementMBean {
                 if (o != null)
                     this.grpcPushMaxConcurrentCalls = (o instanceof Number) ? ((Number) o).intValue()
                             : Integer.parseInt(o.toString());
+
+                o = properties.get(GRPC_USE_SSL);
+                if (o != null)
+                    this.grpcUseSsl = (o instanceof Boolean) ? (Boolean) o : Boolean.parseBoolean(o.toString());
+
+                o = properties.get(GRPC_SSL_TRUST_STORE);
+                if (o != null)
+                    this.grpcSslTrustStore = o.toString();
+
+                o = properties.get(GRPC_PUSH_SSL_CERT_CHAIN);
+                if (o != null) {
+                    String s = o.toString();
+                    this.grpcPushSslCertChain = (s == null || s.trim().isEmpty()) ? null : s.trim();
+                }
+
+                o = properties.get(GRPC_PUSH_SSL_PRIVATE_KEY);
+                if (o != null) {
+                    String s = o.toString();
+                    this.grpcPushSslPrivateKey = (s == null || s.trim().isEmpty()) ? null : s.trim();
+                }
+
+                o = properties.get(HTTP_SESSION_STRATEGY);
+                if (o != null) {
+                    String s = o.toString();
+                    String upper = (s == null) ? null : s.trim().toUpperCase();
+                    if ("HEADER_FIRST".equals(upper) || "COOKIE_FIRST".equals(upper) || "LOCALID_ONLY".equals(upper)) {
+                        this.httpSessionStrategy = upper;
+                    } else {
+                        this.httpSessionStrategy = "HEADER_FIRST";
+                    }
+                }
             }
         } catch (FileNotFoundException e) {
             logger.info("No persisted properties file found at " + persistFile + ". Using defaults.");

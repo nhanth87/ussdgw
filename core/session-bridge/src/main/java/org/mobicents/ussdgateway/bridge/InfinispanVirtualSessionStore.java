@@ -182,11 +182,22 @@ public final class InfinispanVirtualSessionStore implements VirtualSessionStore 
         if (msisdn == null) {
             return true;
         }
-        Object prev = cache.putIfAbsent(KEY_LOCK + msisdn, correlationId);
-        if (prev == null) {
-            // ensure ttl is applied for the freshly created lock
-            put(KEY_LOCK + msisdn, correlationId, ttlMillis);
-            return true;
+        final String key = KEY_LOCK + msisdn;
+        // Retry loop: Infinispan lazily evicts expired entries (on-access or via reaper).
+        // If putIfAbsent returns non-null, the entry may still be alive, or may be an
+        // expired zombie that the reaper hasn't purged yet. A subsequent get() triggers
+        // access-time eviction — if it returns null the slot is free and we retry.
+        for (int spins = 0; spins < 4; spins++) {
+            Object prev = cache.putIfAbsent(key, correlationId);
+            if (prev == null) {
+                put(key, correlationId, ttlMillis);
+                return true;
+            }
+            // Force Infinispan access-time expiry check on the existing entry.
+            if (cache.get(key) == null) {
+                continue; // entry was expired and purged — retry putIfAbsent
+            }
+            return false; // entry is still alive — lock held by another session
         }
         return false;
     }
