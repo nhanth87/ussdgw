@@ -1,5 +1,4 @@
 <dependency xmlns="urn:jboss:dependency:1.0">
-	<item whenRequired="Real" dependentState="Installed">org.restcomm.ss7:service=MAPSS7Service</item>
 	<item whenRequired="Real" dependentState="Installed">UssdManagement</item>
 	<item whenRequired="Real" dependentState="Installed">restcomm-slee-ra-map-du-9.2.12.jar</item>
 	<item whenRequired="Real" dependentState="Installed">restcomm-slee-ra-jdbc-DU-7.0.0-SNAPSHOT.jar</item>
