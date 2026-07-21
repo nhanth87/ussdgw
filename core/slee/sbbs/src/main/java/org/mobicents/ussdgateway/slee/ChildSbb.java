@@ -165,7 +165,9 @@ public abstract class ChildSbb extends USSDBaseSbb implements ChildInterface {
 
 			long evtInvokeId = evt.getInvokeId();
 			long wrappedInvokeId = ((MAPEvent) evt).getWrappedEvent().getInvokeId();
-			logger.info("JENNY-CHILDSBB-RECV: evt.invokeId=" + evtInvokeId + " wrapped.invokeId=" + wrappedInvokeId + " class=" + ((MAPEvent) evt).getWrappedEvent().getClass().getName());
+			if (logger.isFineEnabled()) {
+				logger.fine("JENNY-CHILDSBB-RECV: evt.invokeId=" + evtInvokeId + " wrapped.invokeId=" + wrappedInvokeId + " class=" + ((MAPEvent) evt).getWrappedEvent().getClass().getName());
+			}
 			this.setProcessUnstructuredSSRequestInvokeId(evtInvokeId);
 
 			XmlMAPDialog dialog = this.getXmlMAPDialog();
@@ -680,7 +682,88 @@ public abstract class ChildSbb extends USSDBaseSbb implements ChildInterface {
 	// ///////////////////
 
 	public ChargeInterface getCDRChargeInterface() {
-		return getLocalRaChargeInterface();
+		return new CmpBackedChargeInterface();
+	}
+
+	/**
+	 * Per-entity CDR via CMP. The base {@code localRaCdrState} field is a plain instance field and
+	 * is shared across all SBB entities of this class in Restcomm SLEE — that caused every concurrent
+	 * MAP dialog to reuse one bridge correlationId and overwrite {@code GrpcResponseRegistry} slots.
+	 */
+	// #region agent log
+	private static final java.util.concurrent.atomic.AtomicLong AGENT_CDR_ACCESS = new java.util.concurrent.atomic.AtomicLong();
+	private static final java.util.concurrent.atomic.AtomicLong AGENT_TIMER_ARM = new java.util.concurrent.atomic.AtomicLong();
+	private static final java.util.concurrent.atomic.AtomicLong AGENT_TIMER_ARM_NS = new java.util.concurrent.atomic.AtomicLong();
+	private static final java.util.concurrent.atomic.AtomicLong AGENT_LOG_N = new java.util.concurrent.atomic.AtomicLong();
+
+	/**
+	 * Sampled agent metrics via SLEE Tracer (WF10 / JBoss Logging). Avoids sync Files.write
+	 * on the hot path; do not pull in log4j2 (conflicts with WF10 module logging).
+	 * Grep server.log for prefix {@code AGENT_DBG_NDJSON }.
+	 */
+	private void agentDbgFlush(String hypothesisId, String location, String message, String dataJson) {
+		if (this.logger == null) {
+			return;
+		}
+		try {
+			AGENT_LOG_N.incrementAndGet();
+			String line = "{\"sessionId\":\"6dfc1e\",\"runId\":\"post-fix\",\"hypothesisId\":\"" + hypothesisId
+					+ "\",\"location\":\"" + location + "\",\"message\":\"" + message + "\",\"data\":" + dataJson
+					+ ",\"timestamp\":" + System.currentTimeMillis() + "}";
+			this.logger.warning("AGENT_DBG_NDJSON " + line);
+		} catch (Throwable ignore) {
+		}
+	}
+	// #endregion
+
+	@Override
+	protected USSDCDRState getOrCreateLocalRaCdrState() {
+		USSDCDRState state = getCdrState();
+		boolean created = false;
+		if (state == null) {
+			state = new USSDCDRState();
+			setCdrState(state);
+			created = true;
+		}
+		this.localRaCdrState = state;
+		// #region agent log
+		long n = AGENT_CDR_ACCESS.incrementAndGet();
+		if (n == 1L || n % 500L == 0L) {
+			agentDbgFlush("H1", "ChildSbb.getOrCreateLocalRaCdrState", "cdrAccess rate sample",
+					"{\"cdrAccess\":" + n + ",\"created\":" + created + ",\"agentLogs\":" + AGENT_LOG_N.get()
+							+ ",\"timerArms\":" + AGENT_TIMER_ARM.get()
+							+ ",\"timerArmAvgNs\":"
+							+ (AGENT_TIMER_ARM.get() == 0 ? 0 : AGENT_TIMER_ARM_NS.get() / AGENT_TIMER_ARM.get()) + "}");
+		}
+		// #endregion
+		return state;
+	}
+
+	private final class CmpBackedChargeInterface implements ChargeInterface {
+		@Override
+		public void init(boolean reset) {
+			if (reset) {
+				USSDCDRState fresh = new USSDCDRState();
+				setCdrState(fresh);
+				localRaCdrState = fresh;
+			}
+		}
+
+		@Override
+		public void setState(USSDCDRState state) {
+			setCdrState(state);
+			localRaCdrState = state;
+		}
+
+		@Override
+		public USSDCDRState getState() {
+			return getOrCreateLocalRaCdrState();
+		}
+
+		@Override
+		public void createRecord(RecordStatus outcome) {
+			throw new UnsupportedOperationException("Use submitLocalRaCdr() for LocalRa mode");
+		}
 	}
 
 	// /////////////////
@@ -718,9 +801,9 @@ public abstract class ChildSbb extends USSDBaseSbb implements ChildInterface {
 
 	public abstract XmlMAPDialog getXmlMAPDialog();
 
-	public abstract void setCDRState(USSDCDRState dialog);
+	public abstract void setCdrState(USSDCDRState dialog);
 
-	public abstract USSDCDRState getCDRState();
+	public abstract USSDCDRState getCdrState();
 
 	// 'timerID' CMP field setter
 	public abstract void setTimerID(TimerID value);
@@ -787,11 +870,27 @@ public abstract class ChildSbb extends USSDBaseSbb implements ChildInterface {
 	protected void setTimer(ActivityContextInterface ac) {
 		TimerOptions options = new TimerOptions();
 		long waitingTime = this.getTimerDelayMs();
+		// #region agent log
+		long t0 = System.nanoTime();
+		// #endregion
 		TimerID timerID = this.timerFacility.setTimer(ac, null, System.currentTimeMillis() + waitingTime, options);
+		// #region agent log
+		long armNs = System.nanoTime() - t0;
+		AGENT_TIMER_ARM_NS.addAndGet(armNs);
+		long arms = AGENT_TIMER_ARM.incrementAndGet();
+		if (arms == 1L || arms % 200L == 0L) {
+			agentDbgFlush("H2", "ChildSbb.setTimer", "timerFacility.setTimer cost sample",
+					"{\"timerArms\":" + arms + ",\"lastArmNs\":" + armNs + ",\"timerArmAvgNs\":"
+							+ (AGENT_TIMER_ARM_NS.get() / arms) + ",\"waitingTimeMs\":" + waitingTime
+							+ ",\"cdrAccess\":" + AGENT_CDR_ACCESS.get() + "}");
+		}
+		// #endregion
 		this.setTimerID(timerID);
-		MAPDialogSupplementary mapDialog = this.getMAPDialog();
-		logger.info(String.format("JENNY-TIMER-SET: localDialogId=%s waitingTime=%d timerID=%s", 
-			mapDialog != null ? mapDialog.getLocalDialogId() : "null", waitingTime, timerID));
+		if (logger.isFineEnabled()) {
+			MAPDialogSupplementary mapDialog = this.getMAPDialog();
+			logger.fine(String.format("JENNY-TIMER-SET: localDialogId=%s waitingTime=%d timerID=%s",
+					mapDialog != null ? mapDialog.getLocalDialogId() : "null", waitingTime, timerID));
+		}
 	}
 
 	/**

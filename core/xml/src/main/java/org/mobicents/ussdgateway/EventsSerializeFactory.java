@@ -116,8 +116,19 @@ import org.mobicents.ussdgateway.FastList;
  */
 public class EventsSerializeFactory {
 
-    // SLF4J Logger for proper error logging and debugging
-    private static final Logger logger = LoggerFactory.getLogger(EventsSerializeFactory.class);
+    // SLF4J Logger for proper error logging and debugging.
+    // Must never fail <clinit>: in some SLEE classloader domains no slf4j binding
+    // (StaticLoggerBinder) is visible, and a NoClassDefFoundError here would
+    // permanently kill this class and abort every MAP dialog routed through it.
+    private static final Logger logger = createSafeLogger();
+
+    private static Logger createSafeLogger() {
+        try {
+            return LoggerFactory.getLogger(EventsSerializeFactory.class);
+        } catch (Throwable t) {
+            return org.slf4j.helpers.NOPLogger.NOP_LOGGER;
+        }
+    }
     
     private static final String DIALOG = "dialog";
     private static final String TYPE = "type";
@@ -411,18 +422,18 @@ public class EventsSerializeFactory {
             return new byte[0];
         }
         
-        logger.info("JENNY-SERIALIZE-START: localId={} remoteId={} messageType={}", 
+        logger.debug("JENNY-SERIALIZE-START: localId={} remoteId={} messageType={}", 
             dialog.getLocalDialogId(), dialog.getRemoteDialogId(), dialog.getTCAPMessageType());
         
         try {
             // Log invokeId of each MAP message before serialization
             java.util.List<org.restcomm.protocols.ss7.map.api.MAPMessage> msgs = dialog.getMAPMessages();
             if (msgs != null) {
-                logger.info("JENNY-SERIALIZE-MESSAGE-COUNT: {} messages to serialize", msgs.size());
+                logger.debug("JENNY-SERIALIZE-MESSAGE-COUNT: {} messages to serialize", msgs.size());
                 for (int i = 0; i < msgs.size(); i++) {
                     org.restcomm.protocols.ss7.map.api.MAPMessage msg = msgs.get(i);
                     if (msg != null) {
-                        logger.info("JENNY-SERIALIZE-PRE: message[{}] type={} invokeId={}", 
+                        logger.debug("JENNY-SERIALIZE-PRE: message[{}] type={} invokeId={}", 
                             i, msg.getMessageType(), msg.getInvokeId());
                     } else {
                         logger.warn("JENNY-SERIALIZE-PRE: message[{}] is NULL!", i);
@@ -437,7 +448,7 @@ public class EventsSerializeFactory {
             byte[] result = serializeDialogXml(dialog);
             
             String xmlOutput = new String(result, charset);
-            logger.info("JENNY-SERIALIZE-SUCCESS: xmlLength={} bytes, xmlContent={}", 
+            logger.debug("JENNY-SERIALIZE-SUCCESS: xmlLength={} bytes, xmlContent={}", 
                 result.length, xmlOutput);
             
             return result;
@@ -518,7 +529,10 @@ public class EventsSerializeFactory {
         }
         
         String xmlContent = new String(data, charset);
-        logger.info("JENNY-DESERIALIZE-START: xmlLength={} bytes, xmlContent=\n{}", data.length, xmlContent);
+        // Hot-path: never dump full XML (was ~3–8k CacheData/JENNY lines/s under load).
+        if (logger.isTraceEnabled()) {
+            logger.trace("JENNY-DESERIALIZE-START: xmlLength={} bytes", data.length);
+        }
         
         try {
             logger.debug("JENNY-DESERIALIZE-PARSING: Calling xmlMapper.readTree...");
@@ -528,7 +542,7 @@ public class EventsSerializeFactory {
             logger.debug("JENNY-DESERIALIZE-PARSED: JSON node created, fields={}", root.size());
             
             XmlMAPDialog result = deserializeFromJsonNode(root, mapFragments);
-            logger.info("JENNY-DESERIALIZE-RESULT: dialog={} mapMessagesCount={}", 
+            logger.debug("JENNY-DESERIALIZE-RESULT: dialog={} mapMessagesCount={}", 
                 result != null ? result.getLocalDialogId() : "NULL",
                 result != null && result.getMAPMessages() != null ? result.getMAPMessages().size() : 0);
             return result;
@@ -700,7 +714,7 @@ public class EventsSerializeFactory {
             return null;
         }
         
-        logger.info("JENNY-DESERIALIZE-FROM-JSON: processing JSON node with {} fields", root.size());
+        logger.debug("JENNY-DESERIALIZE-FROM-JSON: processing JSON node with {} fields", root.size());
         logger.debug("JENNY-DESERIALIZE-FROM-JSON: full node content:\n{}", root.toString());
         
         com.fasterxml.jackson.databind.node.ObjectNode standardNode = xmlMapper.createObjectNode();
@@ -718,7 +732,7 @@ public class EventsSerializeFactory {
         int errorComponentCount = 0;
 
         if (preExtractedMapMessages != null && !preExtractedMapMessages.isEmpty()) {
-            logger.info("JENNY-DESERIALIZE-FIELD: Using {} pre-extracted MAP message fragments", preExtractedMapMessages.size());
+            logger.debug("JENNY-DESERIALIZE-FIELD: Using {} pre-extracted MAP message fragments", preExtractedMapMessages.size());
             for (MapMessageFragment fragment : preExtractedMapMessages) {
                 JsonNode msgNode = xmlMapper.readTree(fragment.xml);
                 com.fasterxml.jackson.databind.node.ObjectNode wrapper = xmlMapper.createObjectNode();
@@ -743,21 +757,21 @@ public class EventsSerializeFactory {
                     continue;
                 }
                 // This is a direct MAP message in javolution flat format
-                logger.info("JENNY-DESERIALIZE-FIELD: Found MAP Message field '{}' (value type: {})", fieldName, value.getNodeType());
+                logger.debug("JENNY-DESERIALIZE-FIELD: Found MAP Message field '{}' (value type: {})", fieldName, value.getNodeType());
                 com.fasterxml.jackson.databind.node.ObjectNode wrapper = xmlMapper.createObjectNode();
                 wrapper.set(fieldName, value);
                 messageWrappers.add(wrapper);
                 mapMessageCount++;
             } else if (clazz != null && MAPErrorMessage.class.isAssignableFrom(clazz)) {
                 // Direct error message in javolution format
-                logger.info("JENNY-DESERIALIZE-FIELD: Found Error Message field '{}'", fieldName);
+                logger.debug("JENNY-DESERIALIZE-FIELD: Found Error Message field '{}'", fieldName);
                 com.fasterxml.jackson.databind.node.ObjectNode wrapper = xmlMapper.createObjectNode();
                 wrapper.set(fieldName, value);
                 errorWrappers.add(wrapper);
                 errorComponentCount++;
             } else if ("mapMessages".equals(fieldName) && value.isArray()) {
                 // Internal Jackson format: messages are inside mapMessages array as wrappers
-                logger.info("JENNY-DESERIALIZE-FIELD: Found mapMessages array with {} items", value.size());
+                logger.debug("JENNY-DESERIALIZE-FIELD: Found mapMessages array with {} items", value.size());
                 for (JsonNode item : value) {
                     if (item.isObject()) {
                         messageWrappers.add((com.fasterxml.jackson.databind.node.ObjectNode) item);
@@ -765,7 +779,7 @@ public class EventsSerializeFactory {
                     }
                 }
             } else if ("errorComponents".equals(fieldName) && value.isArray()) {
-                logger.info("JENNY-DESERIALIZE-FIELD: Found errorComponents array with {} items", value.size());
+                logger.debug("JENNY-DESERIALIZE-FIELD: Found errorComponents array with {} items", value.size());
                 for (JsonNode item : value) {
                     if (item.isObject()) {
                         errorWrappers.add((com.fasterxml.jackson.databind.node.ObjectNode) item);
@@ -773,7 +787,7 @@ public class EventsSerializeFactory {
                     }
                 }
             } else if ("rejectComponents".equals(fieldName) && value.isArray()) {
-                logger.info("JENNY-DESERIALIZE-FIELD: Found rejectComponents array with {} items", value.size());
+                logger.debug("JENNY-DESERIALIZE-FIELD: Found rejectComponents array with {} items", value.size());
                 for (JsonNode item : value) {
                     if (item.isObject()) {
                         rejectWrappers.add((com.fasterxml.jackson.databind.node.ObjectNode) item);
@@ -782,7 +796,7 @@ public class EventsSerializeFactory {
             } else if ("errComponents".equals(fieldName) && value.isObject() && value.size() > 0) {
                 // Javolution flat format: <errComponents><id6><MAPErrorMessageAbsentSubscriber.../></id6>...</errComponents>
                 // Each child key is "id<invokeId>" and the value is {<TypeAlias>: <fields>}.
-                logger.info("JENNY-DESERIALIZE-FIELD: Found errComponents object with {} entries", value.size());
+                logger.debug("JENNY-DESERIALIZE-FIELD: Found errComponents object with {} entries", value.size());
                 java.util.Iterator<java.util.Map.Entry<String, JsonNode>> errIt = value.fields();
                 while (errIt.hasNext()) {
                     java.util.Map.Entry<String, JsonNode> entry = errIt.next();
@@ -817,7 +831,7 @@ public class EventsSerializeFactory {
             } else if ("rejectComponents".equals(fieldName) && value.isObject() && value.size() > 0) {
                 // Javolution flat format: <rejectComponents><id2><stringValue>...</stringValue>...</id2></rejectComponents>
                 // The value of each child is the direct fields of ProblemImpl (no inner type alias).
-                logger.info("JENNY-DESERIALIZE-FIELD: Found rejectComponents object with {} entries", value.size());
+                logger.debug("JENNY-DESERIALIZE-FIELD: Found rejectComponents object with {} entries", value.size());
                 Class<?> problemClazz = aliasToClass.get("Problem");
                 if (problemClazz == null) {
                     problemClazz = ProblemImpl.class;
@@ -853,7 +867,7 @@ public class EventsSerializeFactory {
             }
         }
         
-        logger.info("JENNY-DESERIALIZE-FIELD-SUMMARY: processed={} fields, mapMessages={} (direct), errorComponents={}, rejectComponents={}", 
+        logger.debug("JENNY-DESERIALIZE-FIELD-SUMMARY: processed={} fields, mapMessages={} (direct), errorComponents={}, rejectComponents={}", 
             processedFields, mapMessageCount, errorComponentCount, rejectWrappers.size());
         logger.debug("JENNY-DESERIALIZE-STANDARD-NODE: fields being deserialized:\n{}", standardNode.toString());
         
@@ -863,7 +877,7 @@ public class EventsSerializeFactory {
             logger.debug("JENNY-DESERIALIZE-TREE-TO-VALUE: Converting standardNode to XmlMAPDialog...");
             dialog = xmlMapper.treeToValue(standardNode, XmlMAPDialog.class);
             if (dialog != null) {
-                logger.info("JENNY-DESERIALIZE-TREE-TO-VALUE-SUCCESS: dialog localId={} remoteId={}", 
+                logger.debug("JENNY-DESERIALIZE-TREE-TO-VALUE-SUCCESS: dialog localId={} remoteId={}", 
                     dialog.getLocalDialogId(), dialog.getRemoteDialogId());
             } else {
                 logger.warn("JENNY-DESERIALIZE-TREE-TO-VALUE: Result is NULL, creating new XmlMAPDialog");
@@ -902,7 +916,7 @@ public class EventsSerializeFactory {
         int failedDeserializationsCount = 0;
         StringBuilder deserializationErrors = new StringBuilder();
         
-        logger.info("JENNY-DESERIALIZE-MAP-MESSAGES: Processing {} message wrappers", messageWrappers.size());
+        logger.debug("JENNY-DESERIALIZE-MAP-MESSAGES: Processing {} message wrappers", messageWrappers.size());
         for (int wIdx = 0; wIdx < messageWrappers.size(); wIdx++) {
             com.fasterxml.jackson.databind.node.ObjectNode wrapper = messageWrappers.get(wIdx);
             java.util.Iterator<String> wf = wrapper.fieldNames();
@@ -912,7 +926,7 @@ public class EventsSerializeFactory {
                 Class<?> clazz = aliasToClass.get(typeName);
                 if (clazz != null && MAPMessage.class.isAssignableFrom(clazz)) {
                     try {
-                        logger.info("JENNY-DESERIALIZE-MAP-MESSAGE[{}]: typeName={} msgNode={}", 
+                        logger.debug("JENNY-DESERIALIZE-MAP-MESSAGE[{}]: typeName={} msgNode={}", 
                             wIdx, typeName, msgNode.toString());
                         
                         // Normalize Jackson XML attribute prefixes (@attr -> attr)
@@ -924,7 +938,7 @@ public class EventsSerializeFactory {
                         logger.debug("JENNY-DESERIALIZE-MAP-MESSAGE[{}]: Calling treeToValue for class {}", wIdx, clazz.getName());
                         MAPMessage msg = (MAPMessage) xmlMapper.treeToValue(normalizedNode, clazz);
                         if (msg != null) {
-                            logger.info("JENNY-DESERIALIZE-MAP-MESSAGE-SUCCESS[{}]: type={} invokeId={}", 
+                            logger.debug("JENNY-DESERIALIZE-MAP-MESSAGE-SUCCESS[{}]: type={} invokeId={}", 
                                 wIdx, msg.getMessageType(), msg.getInvokeId());
                             dialog.addMAPMessage(msg);
                             successfullyDeserialized++;
@@ -944,7 +958,7 @@ public class EventsSerializeFactory {
         }
         
         // Log summary for this deserialization
-        logger.info("JENNY-DESERIALIZE-SUMMARY: {} messages successfully deserialized, {} failed. Errors: {}", 
+        logger.debug("JENNY-DESERIALIZE-SUMMARY: {} messages successfully deserialized, {} failed. Errors: {}", 
             successfullyDeserialized, failedDeserializationsCount, deserializationErrors.toString());
         
         // Store deserialization status in dialog userObject for downstream handling
@@ -953,7 +967,7 @@ public class EventsSerializeFactory {
         }
         
         // Manually deserialize error components
-        logger.info("JENNY-DESERIALIZE-ERROR-COMPONENTS: Processing {} error component wrappers", errorWrappers.size());
+        logger.debug("JENNY-DESERIALIZE-ERROR-COMPONENTS: Processing {} error component wrappers", errorWrappers.size());
         for (int eIdx = 0; eIdx < errorWrappers.size(); eIdx++) {
             com.fasterxml.jackson.databind.node.ObjectNode wrapper = errorWrappers.get(eIdx);
             java.util.Iterator<String> wf = wrapper.fieldNames();
@@ -966,7 +980,7 @@ public class EventsSerializeFactory {
                         logger.debug("JENNY-DESERIALIZE-ERROR-COMPONENT[{}]: typeName={}", eIdx, typeName);
                         MAPErrorMessage err = (MAPErrorMessage) xmlMapper.treeToValue(errNode, clazz);
                         if (err != null) {
-                            logger.info("JENNY-DESERIALIZE-ERROR-COMPONENT-SUCCESS[{}]: errorCode={}", eIdx, err.getErrorCode());
+                            logger.debug("JENNY-DESERIALIZE-ERROR-COMPONENT-SUCCESS[{}]: errorCode={}", eIdx, err.getErrorCode());
                             // invokeId not available in flat format; skip for now
                         }
                     } catch (Exception e) {
@@ -982,7 +996,7 @@ public class EventsSerializeFactory {
         totalDeserializations++;
         failedDeserializations += failedDeserializationsCount;
         
-        logger.info("JENNY-DESERIALIZE-COMPLETE: dialog localId={} mapMessagesSize={} state=RETURNING", 
+        logger.debug("JENNY-DESERIALIZE-COMPLETE: dialog localId={} mapMessagesSize={} state=RETURNING", 
             dialog.getLocalDialogId(), 
             dialog.getMAPMessages() != null ? dialog.getMAPMessages().size() : 0);
         return dialog;

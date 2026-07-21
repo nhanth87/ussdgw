@@ -8,7 +8,6 @@
         <event-type-vendor>org.mobicents.ussd</event-type-vendor>
         <event-type-version>1.0</event-type-version>
         <event-class-name>org.mobicents.ussd.grpc.events.GrpcPushReceivedEvent</event-class-name>
-        <event-type>message</event-type>
     </event-definition>
 
 </event-jar>

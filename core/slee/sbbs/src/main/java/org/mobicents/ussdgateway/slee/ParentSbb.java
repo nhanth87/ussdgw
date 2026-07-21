@@ -46,10 +46,18 @@ import org.mobicents.ussdgateway.rules.ScRoutingRuleType;
  */
 public abstract class ParentSbb extends USSDBaseSbb {
 
-	private static final ShortCodeRoutingRuleManagement shortCodeRoutingRuleManagement = ShortCodeRoutingRuleManagement
-			.getInstance();
+	/**
+	 * Do not cache singletons in static finals. ParentSbb class-init can race with
+	 * SLEE library classloading; a static final assigned during &lt;clinit&gt; may stay
+	 * null even after UssdPropertiesManagement.getInstance() is fixed to lazy-create.
+	 */
+	private ShortCodeRoutingRuleManagement shortCodeRules() {
+		return ShortCodeRoutingRuleManagement.getInstance();
+	}
 
-	private static final UssdPropertiesManagement ussdPropertiesManagement = UssdPropertiesManagement.getInstance();
+	private UssdPropertiesManagement ussdProps() {
+		return UssdPropertiesManagement.getInstance();
+	}
 
 	/** Creates a new instance of CallSbb */
 	public ParentSbb() {
@@ -82,6 +90,8 @@ public abstract class ParentSbb extends USSDBaseSbb {
 	public void onProcessUnstructuredSSRequest(ProcessUnstructuredSSRequest evt, ActivityContextInterface aci) {
 
 		try {
+			UssdPropertiesManagement ussdPropertiesManagement = ussdProps();
+			ShortCodeRoutingRuleManagement shortCodeRoutingRuleManagement = shortCodeRules();
 	        if (!this.checkMaxActivityCount(ussdPropertiesManagement.getMaxActivityCount())) {
                 if (this.logger.isWarningEnabled()) {
                     this.logger

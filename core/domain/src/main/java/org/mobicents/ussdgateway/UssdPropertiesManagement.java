@@ -199,6 +199,29 @@ public class UssdPropertiesManagement implements UssdPropertiesManagementMBean {
     }
 
     public static UssdPropertiesManagement getInstance() {
+        // SLEE library classloader may not see the bootstrap-module singleton.
+        // Lazy-create+start so ParentSbb static init / SBB calls still work.
+        if (instance == null) {
+            synchronized (UssdPropertiesManagement.class) {
+                if (instance == null) {
+                    UssdPropertiesManagement created = new UssdPropertiesManagement("UssdManagement");
+                    String dir = System.getProperty(UssdManagement.USSD_PERSIST_DIR_KEY);
+                    if (dir == null || dir.isEmpty()) {
+                        dir = System.getProperty("jboss.server.data.dir");
+                    }
+                    if (dir == null || dir.isEmpty()) {
+                        dir = System.getProperty(UssdManagement.USER_DIR_KEY);
+                    }
+                    created.setPersistDir(dir);
+                    try {
+                        created.start();
+                    } catch (Exception e) {
+                        logger.warn("Lazy UssdPropertiesManagement.start() failed: " + e.getMessage(), e);
+                    }
+                    instance = created;
+                }
+            }
+        }
         return instance;
     }
 

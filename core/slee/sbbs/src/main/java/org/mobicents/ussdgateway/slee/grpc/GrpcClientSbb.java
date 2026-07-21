@@ -50,8 +50,19 @@ import org.mobicents.ussdgateway.slee.cdr.USSDCDRState;
  */
 public abstract class GrpcClientSbb extends ChildSbb {
 
-    /** Poll interval for collecting the gRPC reply, in milliseconds. */
+    /**
+     * First poll delay (ms). AS tester uses max-delay=50ms; arm just above that so the
+     * first fire usually hits (miss≈0 → no rearm JTA). Flat 250ms made CDR min≈760ms
+     * (3 hops). FIRST=10 cut min to ~48ms but raised misses and did not lift the ~100/s
+     * high-inflight ceiling.
+     */
+    private static final long FIRST_POLL_MS = 60;
+    /** Rearm delay after a miss (ms). */
     private static final long POLL_INTERVAL_MS = 50;
+
+    /** Wall-clock submit time per correlationId — feeds AdaptiveTimeout (pollCount*interval is 0 on first-hit). */
+    private static final java.util.concurrent.ConcurrentHashMap<String, Long> GRPC_SUBMIT_AT_MS =
+            new java.util.concurrent.ConcurrentHashMap<String, Long>();
 
     protected GrpcAsResourceAdaptorSbbInterface grpcProvider;
 
@@ -83,13 +94,30 @@ public abstract class GrpcClientSbb extends ChildSbb {
         }
         this.setGrpcCorrelationId(correlationId);
         this.setGrpcPollCount(0);
+        GRPC_SUBMIT_AT_MS.put(correlationId, Long.valueOf(System.currentTimeMillis()));
 
         ScRoutingRule call = this.getCall();
         String target = call.getRuleUrl();
         int networkId = xmlMAPDialog.getNetworkId();
 
         // Propagate the bridge request id so the AS can echo it on a late response (Channel A).
-        String requestId = SessionBridgeSupport.getInstance().requestIdFor(correlationId);
+        SessionBridgeSupport bridge = SessionBridgeSupport.getInstance();
+        String requestId = bridge.requestIdFor(correlationId);
+        // #region agent log
+        if (AGENT_POLL_HIT.get() == 0L && AGENT_POLL_MISS.get() == 0L) {
+            if (this.logger != null) {
+                this.logger.warning("AGENT_DBG_NDJSON {\"sessionId\":\"6dfc1e\",\"runId\":\"adaptive-gate\",\"hypothesisId\":\"H15\","
+                        + "\"location\":\"GrpcClientSbb.sendUssdData\",\"message\":\"bridge+gate snapshot\","
+                        + "\"data\":{\"bridgeEnabled\":" + bridge.isEnabled()
+                        + ",\"grpcBridge\":" + bridge.isGrpcClientEnabled()
+                        + ",\"gateMs\":" + bridge.gateTimeoutMs(networkId)
+                        + ",\"dialogTimeoutMs\":" + this.getUssdPropertiesManagement().getDialogTimeout()
+                        + ",\"asyncGateCeilingMs\":" + this.getUssdPropertiesManagement().getAsyncGateTimeoutMs()
+                        + ",\"firstPollMs\":" + FIRST_POLL_MS + "},"
+                        + "\"timestamp\":" + System.currentTimeMillis() + "}");
+            }
+        }
+        // #endregion
         GrpcRequest request = new GrpcRequest(target, correlationId, correlationId, requestId, false,
                 networkId, payload);
         if (grpcProvider != null) {
@@ -106,8 +134,15 @@ public abstract class GrpcClientSbb extends ChildSbb {
 
     @Override
     protected long getTimerDelayMs() {
-        return POLL_INTERVAL_MS;
+        // First arm after submit: short. After a miss, pollCount>=1 → POLL_INTERVAL_MS.
+        return getGrpcPollCount() <= 0 ? FIRST_POLL_MS : POLL_INTERVAL_MS;
     }
+
+    // #region agent log
+    private static final java.util.concurrent.atomic.AtomicLong AGENT_POLL_HIT = new java.util.concurrent.atomic.AtomicLong();
+    private static final java.util.concurrent.atomic.AtomicLong AGENT_POLL_MISS = new java.util.concurrent.atomic.AtomicLong();
+    private static final java.util.concurrent.atomic.AtomicLong AGENT_POLL_GIVEUP = new java.util.concurrent.atomic.AtomicLong();
+    // #endregion
 
     @Override
     protected boolean onProtocolTimer(ActivityContextInterface aci) {
@@ -118,12 +153,36 @@ public abstract class GrpcClientSbb extends ChildSbb {
 
         GrpcResponse response = GrpcResponseRegistry.getInstance().poll(correlationId);
         if (response != null) {
-            // feed observed latency (approx = elapsed polls) into the adaptive timeout model
+            // #region agent log
+            long hits = AGENT_POLL_HIT.incrementAndGet();
+            // #endregion
+            // Feed wall-clock AS RTT into AdaptiveTimeout (pollCount*interval was 0 on first-hit
+            // so EWMA never seeded and gate stayed stuck at asyncgatetimeoutms ceiling).
             try {
                 XmlMAPDialog dialog = this.getXmlMAPDialog();
                 int networkId = dialog != null ? dialog.getNetworkId() : 0;
-                long latency = (long) this.getGrpcPollCount() * POLL_INTERVAL_MS;
-                SessionBridgeSupport.getInstance().recordAsLatency(networkId, latency);
+                Long t0 = GRPC_SUBMIT_AT_MS.remove(correlationId);
+                long latency = (t0 != null) ? (System.currentTimeMillis() - t0.longValue())
+                        : Math.max(FIRST_POLL_MS, (long) this.getGrpcPollCount() * POLL_INTERVAL_MS);
+                SessionBridgeSupport bridge = SessionBridgeSupport.getInstance();
+                bridge.recordAsLatency(networkId, latency);
+                // #region agent log
+                if (hits == 1L || hits % 100L == 0L) {
+                    if (this.logger != null) {
+                        this.logger.warning("AGENT_DBG_NDJSON {\"sessionId\":\"6dfc1e\",\"runId\":\"adaptive-gate\",\"hypothesisId\":\"H15\","
+                                + "\"location\":\"GrpcClientSbb.onProtocolTimer\",\"message\":\"poll hit + adaptive gate\","
+                                + "\"data\":{\"hits\":" + hits + ",\"misses\":" + AGENT_POLL_MISS.get()
+                                + ",\"giveups\":" + AGENT_POLL_GIVEUP.get()
+                                + ",\"pollCount\":" + this.getGrpcPollCount()
+                                + ",\"latencyMs\":" + latency
+                                + ",\"gateMs\":" + bridge.gateTimeoutMs(networkId)
+                                + ",\"ewmaMs\":" + org.mobicents.ussdgateway.bridge.AdaptiveTimeout.getInstance().observedLatencyMs(networkId)
+                                + ",\"bridgeEnabled\":" + bridge.isEnabled()
+                                + ",\"firstPollMs\":" + FIRST_POLL_MS + "},"
+                                + "\"timestamp\":" + System.currentTimeMillis() + "}");
+                    }
+                }
+                // #endregion
             } catch (Exception ignore) {
                 // metrics best-effort
             }
@@ -133,9 +192,26 @@ public abstract class GrpcClientSbb extends ChildSbb {
 
         int attempts = this.getGrpcPollCount();
         if (attempts >= maxPollAttempts()) {
+            // #region agent log
+            AGENT_POLL_GIVEUP.incrementAndGet();
+            GRPC_SUBMIT_AT_MS.remove(correlationId);
+            // #endregion
             // give up polling; fall through to standard timeout / bridge handling
             return false;
         }
+        // #region agent log
+        long misses = AGENT_POLL_MISS.incrementAndGet();
+        if (misses == 1L || misses % 500L == 0L) {
+            if (this.logger != null) {
+                this.logger.warning("AGENT_DBG_NDJSON {\"sessionId\":\"6dfc1e\",\"runId\":\"post-fix\",\"hypothesisId\":\"H2\","
+                        + "\"location\":\"GrpcClientSbb.onProtocolTimer\",\"message\":\"poll miss rearm sample\","
+                        + "\"data\":{\"misses\":" + misses + ",\"hits\":" + AGENT_POLL_HIT.get()
+                        + ",\"giveups\":" + AGENT_POLL_GIVEUP.get()
+                        + ",\"attempts\":" + attempts + ",\"maxAttempts\":" + maxPollAttempts() + "},"
+                        + "\"timestamp\":" + System.currentTimeMillis() + "}");
+            }
+        }
+        // #endregion
         this.setGrpcPollCount(attempts + 1);
         this.rearmTimer(aci);
         return true;
@@ -143,7 +219,17 @@ public abstract class GrpcClientSbb extends ChildSbb {
 
     private int maxPollAttempts() {
         SessionBridgeSupport bridge = SessionBridgeSupport.getInstance();
-        long budget = bridge.isGrpcClientEnabled() ? bridge.gateTimeoutMs()
+        int networkId = 0;
+        try {
+            XmlMAPDialog dialog = this.getXmlMAPDialog();
+            if (dialog != null) {
+                networkId = dialog.getNetworkId();
+            }
+        } catch (Exception ignore) {
+            // default 0
+        }
+        // Adaptive gate (EWMA) when gRPC bridge on — keep poll budget << dialog/TCAP timeouts.
+        long budget = bridge.isGrpcClientEnabled() ? bridge.gateTimeoutMs(networkId)
                 : this.getUssdPropertiesManagement().getDialogTimeout();
         long attempts = budget / POLL_INTERVAL_MS;
         if (attempts < 1) {

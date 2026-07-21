@@ -114,13 +114,13 @@ public class SipSbbProxy extends SipClientSbb {
     }
 
     @Override
-    public void setCDRState(USSDCDRState dialog) {
+    public void setCdrState(USSDCDRState dialog) {
         // TODO Auto-generated method stub
         
     }
 
     @Override
-    public USSDCDRState getCDRState() {
+    public USSDCDRState getCdrState() {
         // TODO Auto-generated method stub
         return null;
     }

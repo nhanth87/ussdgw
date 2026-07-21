@@ -13,7 +13,7 @@
   <cdrloggingto>Textfile</cdrloggingto>
   <cdrSeparator>:</cdrSeparator>
   <maxactivitycount>12000</maxactivitycount>
-  <sessionbridgeenabled>false</sessionbridgeenabled>
+  <sessionbridgeenabled>true</sessionbridgeenabled>
   <asyncgatetimeoutms>7000</asyncgatetimeoutms>
   <asyncwaitusermessage>He thong dang ban, se update lai cho ban ngay</asyncwaitusermessage>
   <asynchardfailmessage>He thong dang co nhieu nguoi su dung, vui long dung lai sau</asynchardfailmessage>

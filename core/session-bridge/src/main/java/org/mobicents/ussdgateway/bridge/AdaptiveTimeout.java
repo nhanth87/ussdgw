@@ -42,7 +42,7 @@ public final class AdaptiveTimeout {
     private static final double ALPHA = 0.2;
     /** Headroom multiplier applied to the average latency to absorb jitter. */
     private static final double HEADROOM = 1.5;
-    private static final long FLOOR_MS = 1000;
+    private static final long FLOOR_MS = 500;
 
     private static final class Ewma {
         volatile double valueMs;

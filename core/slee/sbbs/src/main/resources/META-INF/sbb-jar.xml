@@ -145,6 +145,10 @@
 				<cmp-field>
 					<cmp-field-name>httpSessionId</cmp-field-name>
 				</cmp-field>
+				<!-- Per-entity CDR / bridge correlation (SLEE 1.1: CMP name must start lowercase) -->
+				<cmp-field>
+					<cmp-field-name>cdrState</cmp-field-name>
+				</cmp-field>
 			</sbb-abstract-class>
 			<sbb-local-interface>
 				<sbb-local-interface-name>org.mobicents.ussdgateway.slee.http.HttpClientSbbLocalObject</sbb-local-interface-name>
@@ -382,6 +386,10 @@
 				<cmp-field>
 					<cmp-field-name>grpcPollCount</cmp-field-name>
 				</cmp-field>
+				<!-- Per-entity CDR / bridge correlation (SLEE 1.1: CMP name must start lowercase) -->
+				<cmp-field>
+					<cmp-field-name>cdrState</cmp-field-name>
+				</cmp-field>
 			</sbb-abstract-class>
 			<sbb-local-interface>
 				<sbb-local-interface-name>org.mobicents.ussdgateway.slee.grpc.GrpcClientSbbLocalObject</sbb-local-interface-name>
@@ -597,6 +605,10 @@
 				<!-- Performance optimization: Track HTTP session ID for correlation -->
 				<cmp-field>
 					<cmp-field-name>httpSessionId</cmp-field-name>
+				</cmp-field>
+				<!-- Per-entity CDR / bridge correlation (SLEE 1.1: CMP name must start lowercase) -->
+				<cmp-field>
+					<cmp-field-name>cdrState</cmp-field-name>
 				</cmp-field>
 			</sbb-abstract-class>
 			<sbb-local-interface>

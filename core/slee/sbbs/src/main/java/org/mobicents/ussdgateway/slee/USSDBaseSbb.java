@@ -224,6 +224,10 @@ public class USSDBaseSbb implements Sbb {
 		this.httpServletProvider = null;
 		this.httpServletRaActivityContextInterfaceFactory = null;
 
+		// Instance-field caches — must not leak across pooled SBB objects (Restcomm SLEE).
+		this.localRaCdrState = null;
+		this.cachedMAPDialog = null;
+
 		// clean SLEE
 		this.sbbContext = null;
 		this.logger = null;
@@ -231,18 +235,26 @@ public class USSDBaseSbb implements Sbb {
 
 	public void sbbCreate() throws CreateException {
 		this.cachedMAPDialog = null;
+		this.localRaCdrState = null;
 	}
 
 	public void sbbPostCreate() throws CreateException {
 	}
 
 	public void sbbActivate() {
+		// Object may have been reused; never trust a previous entity's MAP dialog cache.
+		this.cachedMAPDialog = null;
 	}
 
 	public void sbbPassivate() {
+		// Passivation: drop transient caches; CMP cdrState remains in entity store.
+		this.localRaCdrState = null;
+		this.cachedMAPDialog = null;
 	}
 
 	public void sbbLoad() {
+		this.localRaCdrState = null;
+		this.cachedMAPDialog = null;
 	}
 
 	public void sbbStore() {
@@ -250,6 +262,7 @@ public class USSDBaseSbb implements Sbb {
 
 	public void sbbRemove() {
 		this.cachedMAPDialog = null;
+		this.localRaCdrState = null;
 	}
 
 	public void sbbExceptionThrown(Exception exception, Object object, ActivityContextInterface activityContextInterface) {
@@ -259,18 +272,39 @@ public class USSDBaseSbb implements Sbb {
 	}
 
 	/**
-	 * Cached MAP dialog lookup - optimized for stateless USSD message processing.
-	 * Since each USSD session typically has one MAP dialog, caching eliminates O(n) iteration.
-	 * Cache is cleared on sbbCreate() and sbbRemove() lifecycle events.
+	 * Per-invocation MAP dialog lookup with a short-lived instance cache.
+	 * <p>
+	 * Restcomm SLEE reuses concrete SBB Java objects across entities, so a bare
+	 * {@code cachedMAPDialog} field (without validating against
+	 * {@code sbbContext.getActivities()}) leaks dialog references between concurrent
+	 * sessions — Continu/End then hit the wrong MAP dialog (stuck {@code INITIAL_RECEIVED}).
 	 */
 	private volatile MAPDialogSupplementary cachedMAPDialog = null;
 
 	protected MAPDialogSupplementary getMAPDialog() {
-		if (cachedMAPDialog != null) {
-			return cachedMAPDialog;
+		if (this.sbbContext == null) {
+			return null;
 		}
-		
 		ActivityContextInterface[] acis = this.sbbContext.getActivities();
+		if (cachedMAPDialog != null) {
+			for (ActivityContextInterface aci : acis) {
+				if (aci.getActivity() == cachedMAPDialog) {
+					return cachedMAPDialog;
+				}
+			}
+			// #region agent log
+			if (this.logger != null) {
+				long staleId = cachedMAPDialog.getLocalDialogId();
+				this.logger.warning("AGENT_DBG_NDJSON {\"sessionId\":\"6dfc1e\",\"runId\":\"post-fix\",\"hypothesisId\":\"H-CACHE\","
+						+ "\"location\":\"USSDBaseSbb.getMAPDialog\",\"message\":\"stale cachedMAPDialog discarded\","
+						+ "\"data\":{\"sbbIdentity\":" + System.identityHashCode(this)
+						+ ",\"staleLocalDialogId\":" + staleId
+						+ ",\"activityCount\":" + acis.length + "},"
+						+ "\"timestamp\":" + System.currentTimeMillis() + "}");
+			}
+			// #endregion
+			cachedMAPDialog = null;
+		}
 		for (ActivityContextInterface aci : acis) {
 			Object activity = aci.getActivity();
 			if (activity instanceof MAPDialogSupplementary) {
@@ -284,7 +318,9 @@ public class USSDBaseSbb implements Sbb {
 	protected void processXmlMAPDialog(XmlMAPDialog xmlMAPDialog, MAPDialogSupplementary mapDialog)
 			throws MAPException {
         FastList<MAPMessage> mapMessages = xmlMAPDialog.getMAPMessages();
-		logger.info("JENNY-USSDBASE-DEBUG: processXmlMAPDialog mapMessages=" + (mapMessages != null ? mapMessages.size() : -1) + " mapDialog=" + mapDialog);
+		if (logger.isFineEnabled()) {
+			logger.fine("JENNY-USSDBASE-DEBUG: processXmlMAPDialog mapMessages=" + (mapMessages != null ? mapMessages.size() : -1) + " mapDialog=" + mapDialog);
+		}
         if (mapMessages != null) {
             for (int i = 0; i < mapMessages.size(); i++) {
                 MAPMessage msg = mapMessages.get(i);
@@ -294,16 +330,22 @@ public class USSDBaseSbb implements Sbb {
                     }
                     continue;
                 }
-				logger.info("JENNY-USSDBASE-DEBUG: processing msg " + i + "/" + mapMessages.size() + " type=" + msg.getMessageType());
+				if (logger.isFineEnabled()) {
+					logger.fine("JENNY-USSDBASE-DEBUG: processing msg " + i + "/" + mapMessages.size() + " type=" + msg.getMessageType());
+				}
                 Long invokeId = this.processMAPMessageFromApplication(msg, mapDialog, xmlMAPDialog.getCustomInvokeTimeOut());
-				logger.info("JENNY-USSDBASE-DEBUG: msg " + i + " done, invokeId=" + invokeId);
+				if (logger.isFineEnabled()) {
+					logger.fine("JENNY-USSDBASE-DEBUG: msg " + i + " done, invokeId=" + invokeId);
+				}
             }
         }
 	}
 
 	protected Long processMAPMessageFromApplication(MAPMessage mapMessage,
 			MAPDialogSupplementary mapDialogSupplementary, Integer customInvokeTimeout) throws MAPException {
-		logger.info("JENNY-USSDBASE-DEBUG: processMAPMessageFromApplication msgType=" + mapMessage.getMessageType() + " mapDialog=" + mapDialogSupplementary + " customTimeout=" + customInvokeTimeout);
+		if (logger.isFineEnabled()) {
+			logger.fine("JENNY-USSDBASE-DEBUG: processMAPMessageFromApplication msgType=" + mapMessage.getMessageType() + " mapDialog=" + mapDialogSupplementary + " customTimeout=" + customInvokeTimeout);
+		}
 		switch (mapMessage.getMessageType()) {
 		case unstructuredSSRequest_Request:
 			UnstructuredSSRequest unstructuredSSRequest = (UnstructuredSSRequest) mapMessage;
@@ -324,7 +366,9 @@ public class USSDBaseSbb implements Sbb {
 		case processUnstructuredSSRequest_Response:
 			ProcessUnstructuredSSResponse processUnstructuredSSResponse = (ProcessUnstructuredSSResponse) mapMessage;
 			long respInvokeId = processUnstructuredSSResponse.getInvokeId();
-			logger.info("JENNY-USSDBASE-RESPONSE: invokeId=" + respInvokeId + " dcs=" + processUnstructuredSSResponse.getDataCodingScheme() + " ussd=" + processUnstructuredSSResponse.getUSSDString());
+			if (logger.isFineEnabled()) {
+				logger.fine("JENNY-USSDBASE-RESPONSE: invokeId=" + respInvokeId + " dcs=" + processUnstructuredSSResponse.getDataCodingScheme() + " ussd=" + processUnstructuredSSResponse.getUSSDString());
+			}
 			mapDialogSupplementary.addProcessUnstructuredSSResponse(respInvokeId,
 					processUnstructuredSSResponse.getDataCodingScheme(), processUnstructuredSSResponse.getUSSDString());
 			return respInvokeId;

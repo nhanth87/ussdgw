@@ -238,6 +238,8 @@
         <echo>Copy USSD Gateway DUs</echo>
         <copy file="${restcomm.ussd.dir}/core/slee/services-du/target/services-DU-${restcomm.ussd.release.version}.jar" todir="${deploy.dir}" failonerror="true" />
         <copy file="${restcomm.ussd.dir}/management/ussd-management/target/ussd-management.war" todir="${deploy.dir}" failonerror="true" />
+        <copy file="${restcomm.ussd.dir}/core/slee/resources/grpc-as/du/target/ussd-grpc-as-ra-DU-${restcomm.ussd.release.version}.jar" todir="${deploy.dir}" failonerror="true" />
+        <copy file="${restcomm.ussd.dir}/core/slee/resources/cdr-local/du/target/ussd-cdr-local-ra-DU-${restcomm.ussd.release.version}.jar" todir="${deploy.dir}" failonerror="true" />
 
         <!-- deploy: MAP RA DU from local workspace -->
         <echo>Copy RestComm MAP RA DU from local workspace</echo>

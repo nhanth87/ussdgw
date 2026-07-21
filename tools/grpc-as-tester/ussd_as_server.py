@@ -42,47 +42,68 @@ class MenuEngine:
     def __init__(self, config: dict):
         self.root = config["root"]
         self.nodes = config["nodes"]
+        # session_id -> {"node": name, "process_invoke_id": int}
         self._sessions = {}
         self._lock = threading.Lock()
 
     def handle(self, session_id: str, parsed: dict):
         """
-        Returns (text, end) for the given inbound parsed dialogue.
-        On the initial request we show the root menu; on each reply we advance the tree.
+        Returns (text, end, response_invoke_id) for the given inbound parsed dialogue.
+
+        response_invoke_id: for Continue/USSR prompts, echo the inbound invoke id (GW may
+        reallocate). For End/ProcessUSSResponse, MUST be the original ProcessUnstructuredSSRequest
+        invoke id — not the last UnstructuredSSRequest id (that caused UnrecognizedInvokeID).
         """
         msg_type = parsed["message_type"]
+        inbound_invoke = int(parsed.get("invoke_id") or 0)
+
         if msg_type == "process_request":
             node_name = self.root
             with self._lock:
-                self._sessions[session_id] = node_name
+                self._sessions[session_id] = {
+                    "node": node_name,
+                    "process_invoke_id": inbound_invoke,
+                }
             node = self.nodes[node_name]
-            return node["text"], bool(node.get("final"))
+            return node["text"], bool(node.get("final")), inbound_invoke
 
         if msg_type == "ussd_response":
             with self._lock:
-                node_name = self._sessions.get(session_id, self.root)
+                sess = self._sessions.get(session_id)
+            if sess is None:
+                node_name = self.root
+                process_invoke_id = 0
+            else:
+                node_name = sess.get("node", self.root)
+                process_invoke_id = int(sess.get("process_invoke_id", 0))
             node = self.nodes.get(node_name, self.nodes[self.root])
             choice = (parsed.get("ussd_string") or "").strip()
             options = node.get("options", {})
             next_name = options.get(choice) or options.get("*")
             if next_name is None:
-                # invalid choice: re-show the current menu
-                return "Invalid choice.\n" + node["text"], False
+                return "Invalid choice.\n" + node["text"], False, inbound_invoke
             if next_name == "__end__":
                 with self._lock:
                     self._sessions.pop(session_id, None)
-                return "Thank you for using Jenny USSD. Goodbye!", True
+                return "Thank you for using Jenny USSD. Goodbye!", True, process_invoke_id
             nxt = self.nodes[next_name]
             with self._lock:
-                self._sessions[session_id] = next_name
+                if sess is None:
+                    self._sessions[session_id] = {
+                        "node": next_name,
+                        "process_invoke_id": process_invoke_id,
+                    }
+                else:
+                    sess["node"] = next_name
+                    self._sessions[session_id] = sess
             is_final = bool(nxt.get("final"))
             if is_final:
                 with self._lock:
                     self._sessions.pop(session_id, None)
-            return nxt["text"], is_final
+                return nxt["text"], True, process_invoke_id
+            return nxt["text"], False, inbound_invoke
 
-        # Unknown inbound: end politely
-        return "Session ended.", True
+        return "Session ended.", True, inbound_invoke
 
 
 class UssdProcessor:
@@ -123,12 +144,12 @@ class UssdProcessor:
             time.sleep(random.randint(lo, hi) / 1000.0)
 
         parsed = uxml.parse_request(envelope.get("payload", b""))
-        text, end = self.engine.handle(session_id, parsed)
+        text, end, response_invoke_id = self.engine.handle(session_id, parsed)
 
         response_xml = uxml.build_response(
             message_type=parsed["message_type"],
             text=text,
-            invoke_id=parsed.get("invoke_id", 0),
+            invoke_id=response_invoke_id,
             end=end,
             user_object="sessionId=%s" % session_id,
             network_id=parsed.get("network_id", 0),
@@ -157,7 +178,11 @@ def build_server(processor: UssdProcessor, port: int, workers: int) -> grpc.Serv
         ],
     )
     server.add_generic_rpc_handlers((generic,))
-    server.add_insecure_port("[::]:%d" % port)
+    # Bind IPv4 explicitly (0.0.0.0), NOT dual-stack "[::]". The gateway's gRPC client dials
+    # 127.0.0.1:<port> (IPv4). A "[::]" listener relies on IPv4-mapped-IPv6, which is flaky in the
+    # host-network podman container here — the channel wedges in TRANSIENT_FAILURE ("connection
+    # refused") even though the AS is listening. 0.0.0.0 accepts the IPv4 connection unambiguously.
+    server.add_insecure_port("0.0.0.0:%d" % port)
     return server
 
 

@@ -54,6 +54,7 @@ import org.mobicents.ussdgateway.UssdPropertiesManagement;
 
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
+import io.grpc.ConnectivityState;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.MethodDescriptor;
@@ -193,14 +194,26 @@ public class GrpcAsResourceAdaptor implements ResourceAdaptor, GrpcPushServerCon
         });
     }
 
+    /**
+     * A cached channel wedged in {@link ConnectivityState#TRANSIENT_FAILURE} after the AS was
+     * unreachable at first dial must not be reused — gRPC only recovers after {@code shutdownNow()}.
+     */
+    private static boolean isChannelUsable(ManagedChannel channel) {
+        if (channel == null || channel.isShutdown() || channel.isTerminated()) {
+            return false;
+        }
+        ConnectivityState state = channel.getState(false);
+        return state != ConnectivityState.TRANSIENT_FAILURE && state != ConnectivityState.SHUTDOWN;
+    }
+
     private ManagedChannel channel(String target) {
         ManagedChannel existing = channels.get(target);
-        if (existing != null && !existing.isShutdown()) {
+        if (existing != null && isChannelUsable(existing)) {
             return existing;
         }
         synchronized (channels) {
             existing = channels.get(target);
-            if (existing != null && !existing.isShutdown()) {
+            if (existing != null && isChannelUsable(existing)) {
                 return existing;
             }
             // Shutdown stale channel before creating new one

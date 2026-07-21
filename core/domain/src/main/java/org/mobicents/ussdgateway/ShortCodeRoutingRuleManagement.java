@@ -78,6 +78,29 @@ public class ShortCodeRoutingRuleManagement implements ShortCodeRoutingRuleManag
     }
 
     public static ShortCodeRoutingRuleManagement getInstance() {
+        // Mirror UssdPropertiesManagement: SLEE library CL needs its own singleton.
+        if (instance == null) {
+            synchronized (ShortCodeRoutingRuleManagement.class) {
+                if (instance == null) {
+                    ShortCodeRoutingRuleManagement created = new ShortCodeRoutingRuleManagement("UssdManagement");
+                    String dir = System.getProperty(UssdManagement.USSD_PERSIST_DIR_KEY);
+                    if (dir == null || dir.isEmpty()) {
+                        dir = System.getProperty("jboss.server.data.dir");
+                    }
+                    if (dir == null || dir.isEmpty()) {
+                        dir = System.getProperty(UssdManagement.USER_DIR_KEY);
+                    }
+                    created.setPersistDir(dir);
+                    try {
+                        created.start();
+                    } catch (Exception e) {
+                        // logger may not be ready; swallow — empty rule list is safer than NPE
+                        System.err.println("Lazy ShortCodeRoutingRuleManagement.start() failed: " + e.getMessage());
+                    }
+                    instance = created;
+                }
+            }
+        }
         return instance;
     }
 
