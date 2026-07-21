@@ -506,9 +506,18 @@
                     <handler name="CSVSTATS" />
                 </handlers>
             </logger>
+            <!-- Hot-path silencers: these two categories log per-dialog at INFO
+                 (JBoss Cache node dumps + XML (de)serialize traces) and were
+                 measured at 3-8k lines/s under load — a primary TPS bottleneck. -->
+            <logger category="org.restcomm.cache">
+                <level name="WARN" />
+            </logger>
+            <logger category="org.mobicents.ussdgateway.EventsSerializeFactory">
+                <level name="WARN" />
+            </logger>
             <!-- mobicents-ussdgateway -->
             <logger category="javax.slee.SbbNotification[service=ServiceID[name=mobicents-ussdgateway,vendor=org.mobicents,version=1.0],sbb=SbbID[name=ParentSbb,vendor=org.mobicents,version=1.0]]">
-                <level name="DEBUG" />
+                <level name="INFO" />
             </logger>
             <logger category="javax.slee.SbbNotification[service=ServiceID[name=mobicents-ussdgateway,vendor=org.mobicents,version=1.0],sbb=SbbID[name=HttpClientSbb,vendor=org.mobicents,version=1.0]]">
                 <level name="DEBUG" />
