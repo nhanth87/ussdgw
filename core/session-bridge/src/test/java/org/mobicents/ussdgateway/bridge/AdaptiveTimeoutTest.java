@@ -41,19 +41,41 @@ public class AdaptiveTimeoutTest {
             at.recordLatency(net, 50000); // very slow AS
         }
         long gate = at.suggestGateMs(net, 7000);
-        assertTrue(gate <= 7000, "gate must not exceed configured ceiling, was " + gate);
-        assertTrue(gate >= 1000, "gate must respect floor, was " + gate);
+        assertTrue(gate <= 7000, "Adaptive Timeout must not exceed configured ceiling, was " + gate);
+        assertTrue(gate >= 500, "Adaptive Timeout must respect floor, was " + gate);
     }
 
     @Test
-    public void fastAsYieldsShorterGate() {
+    public void fastAsYieldsShorterTimeout() {
         AdaptiveTimeout at = AdaptiveTimeout.getInstance();
         int net = 556;
         for (int i = 0; i < 20; i++) {
             at.recordLatency(net, 1200);
         }
         long gate = at.suggestGateMs(net, 7000);
-        assertTrue(gate < 7000, "fast AS should yield a gate below the ceiling, was " + gate);
-        assertTrue(gate >= 1000, "gate must respect floor, was " + gate);
+        assertTrue(gate < 7000, "fast AS should yield Adaptive Timeout below the ceiling, was " + gate);
+        assertTrue(gate >= 500, "Adaptive Timeout must respect floor, was " + gate);
+        // 1200ms EWMA * 1.5 headroom ≈ 1800ms
+        assertTrue(gate >= 1500 && gate <= 2500, "expected ~1800ms Adaptive Timeout, was " + gate);
+    }
+
+    @Test
+    public void ignoresNonPositiveLatency() {
+        AdaptiveTimeout at = AdaptiveTimeout.getInstance();
+        int net = 557;
+        at.recordLatency(net, 0);
+        at.recordLatency(net, -1);
+        assertEquals(at.suggestGateMs(net, 7000), 7000);
+        assertEquals(at.observedLatencyMs(net), 0d);
+    }
+
+    @Test
+    public void veryFastAsHitsFloor() {
+        AdaptiveTimeout at = AdaptiveTimeout.getInstance();
+        int net = 558;
+        for (int i = 0; i < 20; i++) {
+            at.recordLatency(net, 100); // 100 * 1.5 = 150 → floor 500
+        }
+        assertEquals(at.suggestGateMs(net, 7000), 500);
     }
 }

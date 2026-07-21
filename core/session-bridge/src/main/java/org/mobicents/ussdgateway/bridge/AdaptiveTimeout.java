@@ -22,13 +22,12 @@ package org.mobicents.ussdgateway.bridge;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Per-network adaptive gate timeout. Tracks an exponentially-weighted moving average (EWMA) of the
- * observed AS response latency and proposes a gate that is comfortably above typical latency but
- * still safely below the network timeout. This lets a fast AS use a short gate (early bridge) while
- * a consistently slow AS gets a longer one, reducing needless bridging.
+ * Adaptive Timeout — per-{@code networkId} EWMA of observed AS response latency that proposes the
+ * effective wait budget before Virtual Session Bridge early-release.
  * <p>
- * The proposal is always clamped to {@code [floor, configuredGate]} so it can never exceed the
- * operator-configured ceiling.
+ * Proposal = {@code ewma × HEADROOM}, clamped to {@code [FLOOR_MS, configuredCeiling]}. A fast AS
+ * gets a short Adaptive Timeout (fail/bridge early); a slow AS gets a longer one (wait it out).
+ * The name of this feature is <b>Adaptive Timeout</b> — do not rename in logs, docs, or tests.
  */
 public final class AdaptiveTimeout {
 

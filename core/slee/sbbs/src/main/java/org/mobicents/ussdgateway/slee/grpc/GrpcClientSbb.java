@@ -106,8 +106,14 @@ public abstract class GrpcClientSbb extends ChildSbb {
         // #region agent log
         if (AGENT_POLL_HIT.get() == 0L && AGENT_POLL_MISS.get() == 0L) {
             if (this.logger != null) {
-                this.logger.warning("AGENT_DBG_NDJSON {\"sessionId\":\"6dfc1e\",\"runId\":\"adaptive-gate\",\"hypothesisId\":\"H15\","
-                        + "\"location\":\"GrpcClientSbb.sendUssdData\",\"message\":\"bridge+gate snapshot\","
+                this.logger.warning("ADAPTIVE-TIMEOUT snapshot bridgeEnabled=" + bridge.isEnabled()
+                        + " grpcBridge=" + bridge.isGrpcClientEnabled()
+                        + " gateMs=" + bridge.gateTimeoutMs(networkId)
+                        + " asyncGateCeilingMs=" + this.getUssdPropertiesManagement().getAsyncGateTimeoutMs()
+                        + " dialogTimeoutMs=" + this.getUssdPropertiesManagement().getDialogTimeout()
+                        + " firstPollMs=" + FIRST_POLL_MS);
+                this.logger.warning("AGENT_DBG_NDJSON {\"sessionId\":\"6dfc1e\",\"runId\":\"adaptive-timeout\",\"hypothesisId\":\"H15\","
+                        + "\"location\":\"GrpcClientSbb.sendUssdData\",\"message\":\"ADAPTIVE-TIMEOUT snapshot\","
                         + "\"data\":{\"bridgeEnabled\":" + bridge.isEnabled()
                         + ",\"grpcBridge\":" + bridge.isGrpcClientEnabled()
                         + ",\"gateMs\":" + bridge.gateTimeoutMs(networkId)
@@ -167,16 +173,27 @@ public abstract class GrpcClientSbb extends ChildSbb {
                 SessionBridgeSupport bridge = SessionBridgeSupport.getInstance();
                 bridge.recordAsLatency(networkId, latency);
                 // #region agent log
+                // Stable greppable marker for Adaptive Timeout tests (sampled: first + every 100).
+                long gateMs = bridge.gateTimeoutMs(networkId);
+                double ewmaMs = org.mobicents.ussdgateway.bridge.AdaptiveTimeout.getInstance()
+                        .observedLatencyMs(networkId);
                 if (hits == 1L || hits % 100L == 0L) {
                     if (this.logger != null) {
-                        this.logger.warning("AGENT_DBG_NDJSON {\"sessionId\":\"6dfc1e\",\"runId\":\"adaptive-gate\",\"hypothesisId\":\"H15\","
-                                + "\"location\":\"GrpcClientSbb.onProtocolTimer\",\"message\":\"poll hit + adaptive gate\","
+                        this.logger.warning("ADAPTIVE-TIMEOUT networkId=" + networkId
+                                + " latencyMs=" + latency
+                                + " ewmaMs=" + ((long) ewmaMs)
+                                + " gateMs=" + gateMs
+                                + " bridgeEnabled=" + bridge.isEnabled()
+                                + " pollCount=" + this.getGrpcPollCount()
+                                + " hits=" + hits);
+                        this.logger.warning("AGENT_DBG_NDJSON {\"sessionId\":\"6dfc1e\",\"runId\":\"adaptive-timeout\",\"hypothesisId\":\"H15\","
+                                + "\"location\":\"GrpcClientSbb.onProtocolTimer\",\"message\":\"ADAPTIVE-TIMEOUT poll hit\","
                                 + "\"data\":{\"hits\":" + hits + ",\"misses\":" + AGENT_POLL_MISS.get()
                                 + ",\"giveups\":" + AGENT_POLL_GIVEUP.get()
                                 + ",\"pollCount\":" + this.getGrpcPollCount()
                                 + ",\"latencyMs\":" + latency
-                                + ",\"gateMs\":" + bridge.gateTimeoutMs(networkId)
-                                + ",\"ewmaMs\":" + org.mobicents.ussdgateway.bridge.AdaptiveTimeout.getInstance().observedLatencyMs(networkId)
+                                + ",\"gateMs\":" + gateMs
+                                + ",\"ewmaMs\":" + ewmaMs
                                 + ",\"bridgeEnabled\":" + bridge.isEnabled()
                                 + ",\"firstPollMs\":" + FIRST_POLL_MS + "},"
                                 + "\"timestamp\":" + System.currentTimeMillis() + "}");
